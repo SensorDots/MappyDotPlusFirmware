@@ -38,11 +38,10 @@
 #include "vl53l1_platform_init.h"
 
 
+
 VL53L1_Error VL53L1_platform_init(
 	VL53L1_Dev_t *pdev,
-	uint8_t       i2c_slave_address,
-	uint8_t       comms_type,
-	uint16_t      comms_speed_khz)
+	uint8_t       i2c_slave_address)
 {
 	/*
 	 * Initialise comms, GPIOs (xshutdown, ncs, EVK power regulator enable)
@@ -54,37 +53,17 @@ VL53L1_Error VL53L1_platform_init(
 	/* remember comms settings */
 
 	pdev->i2c_slave_address = i2c_slave_address;
-	pdev->comms_type        = comms_type;
-	pdev->comms_speed_khz   = comms_speed_khz;
 
-	if (status == VL53L1_ERROR_NONE) /*lint !e774 always true*/
+	//if (status == VL53L1_ERROR_NONE) /*lint !e774 always true*/
 		status =
 			VL53L1_CommsInitialise(
-				pdev,
-				pdev->comms_type,
-				pdev->comms_speed_khz);
+				pdev);
 
 	/* Ensure device is in reset */
 	if (status == VL53L1_ERROR_NONE)
 		status = VL53L1_GpioXshutdown(0);
 
-	/* disable the platform regulators */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_GpioPowerEnable(0);
-
-	/* set the NCS pin for I2C mode */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_GpioCommsSelect(0);
-
-	/* 1ms Wait to ensure XSHUTD / NCS are in the right state */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_WaitUs(pdev, 1000);
-
-	/* enable the platform regulators */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_GpioPowerEnable(1);
-
-	/* 1ms Wait for power regs to settle */
+	/* 1ms Wait to ensure XSHUTD is in the right state */
 	if (status == VL53L1_ERROR_NONE)
 		status = VL53L1_WaitUs(pdev, 1000);
 
@@ -111,12 +90,12 @@ VL53L1_Error VL53L1_platform_terminate(
 	VL53L1_Error status = VL53L1_ERROR_NONE;
 
 	/* put device in reset */
-	if (status == VL53L1_ERROR_NONE) /*lint !e774 always true*/
+	//if (status == VL53L1_ERROR_NONE) /*lint !e774 always true*/
 		status = VL53L1_GpioXshutdown(0);
 
 	/* disable the platform regulators */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_GpioPowerEnable(0);
+	/*if (status == VL53L1_ERROR_NONE)
+		status = VL53L1_GpioPowerEnable(0);*/
 
 	/* close the comms interfaces */
 	if (status == VL53L1_ERROR_NONE)

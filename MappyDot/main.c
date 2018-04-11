@@ -38,7 +38,7 @@
 #include <atmel_start.h>
 #include <avr/wdt.h>
 #include <string.h>
-#include "vl53l0x.h"
+#include "vl53l1x.h"
 #include "addr.h"
 #include "i2c_slave.h"
 #include "history_buffer.h"
@@ -48,10 +48,9 @@
 #include "nvmctrl.h"
 #include "crc8.h"
 #include "stackmon.h"
-#include "vl53l0x_types.h"
+#include "vl53l1_types.h"
 #include "main.h"
 #include "sleeping.h"
-#include "vl53l0x_profiles.h"
 #include "helper.h" //Main helper function
 
 
@@ -59,23 +58,23 @@
 #warning Some functions are disabled with DEV_DISABLE
 #endif
 
-#define VERSION_STRING                "MD_FW_V1.3"
+#define VERSION_STRING                "MDPFW_V1.0"
 
-#define EEPROM_BOOTLOADER_BYTE        0x02
 #define EEPROM_ADDRESS_BYTE           0x01
-#define EEPROM_FACTORY_SETTINGS_START 0x20
+#define EEPROM_BOOTLOADER_BYTE        0x02
+#define EEPROM_DEVICE_NAME            0x20
+#define EEPROM_FACTORY_SETTINGS_START 0x40
 #define EEPROM_USER_SETTINGS_START    0x60
-#define EEPROM_DEVICE_NAME            0x100
-#define EEPROM_CUSTOM_PROFILE_SETINGS 0x120
-#define FILTER_ORDER                  2  //Filter order
-#define SAMPLING_FREQ                 30 //Samples per second
+#define EEPROM_FACTORY_CALIB_START    0x80 //Size 95 bytes
+#define EEPROM_USER_CALIB_START       0xF0
+
 #define FILTER_FREQUENCY              6  //Hz
-#define SETTINGS_SIZE                 29 // first byte is 0
-#define CUSTOM_PROFILE_SETTINGS_SIZE  9
-#define MIN_DIST                      30 //minimum distance from VL53L0X
-#define MAX_DIST                      4000 //Max sanity distance from VL53L0X
+#define SETTINGS_SIZE                 17
+#define CALIB_SIZE                    95
+#define MIN_DIST                      30 //minimum distance from VL53L1X
+#define MAX_DIST                      5000 //Max sanity distance from VL53L1X
 #define ACCURACY_LIMIT                1200
-#define T_BOOT_MS                     2 //tBOOT is 1.2ms max as per VL53L0X datasheet
+//#define T_BOOT_MS                     2
 
 /* Private methods */
 static void get_settings_buffer(uint8_t * buffer, bool stored_settings);
@@ -92,12 +91,11 @@ int16_t slave_address;
 filter_state low_pass_filter_state;
 
 /* We do this so the struct is allocated as pointers are not allocated */
-VL53L0X_Dev_t device;
-VL53L0X_Dev_t * pDevice;
-VL53L0X_RangingMeasurementData_t measure;
-VL53L0X_Error status;
-VL53L0X_Measurement_Mode measurement_profile;
-uint8_t custom_profile_settings[CUSTOM_PROFILE_SETTINGS_SIZE]; //For custom measurement profiles
+VL53L1_Dev_t device;
+VL53L1_Dev_t * pDevice;
+VL53L1_RangingMeasurementData_t measure;
+VL53L1_Error status;
+VL53L1_UserRoi_t ROI;
 
 uint16_t filtered_distance;
 uint16_t real_distance;
@@ -105,36 +103,29 @@ uint8_t error_code;
 uint16_t distance_error;
 uint16_t current_millimeters  = 0;
 
-volatile bool filtering_enabled  = 1;
-volatile bool averaging_enabled  = 0;
-volatile bool factory_mode       = 0;
-volatile bool crosstalk_enabled  = 0;
-volatile bool vl53l0x_powerstate = 0;
-volatile bool is_master          = 0;
+bool filtering_enabled  = 1;
+bool averaging_enabled  = 0;
+bool factory_mode       = 0;
+bool crosstalk_enabled  = 0;
+bool vl53l1x_powerstate = 0;
+bool is_master          = 0;
 
-volatile uint8_t led_mode                      = LED_PWM_ENABLED;
-volatile uint8_t gpio_mode                     = GPIO_MEASUREMENT_INTERRUPT;
-volatile uint8_t current_ranging_mode          = SET_CONTINUOUS_RANGING_MODE; //SET_SINGLE_RANGING_MODE; 
-volatile uint8_t current_measurement_mode      = VL53L0X_DEFAULT;
-volatile uint32_t led_threshold                = 300;
-volatile uint32_t gpio_threshold               = 300;
-volatile uint8_t averaging_size                = 4;
-volatile uint8_t intersensor_crosstalk_delay   = 0;
-volatile uint8_t intersensor_crosstalk_timeout = 40; //40*ticks
+uint8_t led_mode                      = LED_PWM_ENABLED;
+uint8_t gpio_mode                     = GPIO_MEASUREMENT_INTERRUPT;
+uint8_t current_ranging_mode          = SET_CONTINUOUS_RANGING_MODE; //SET_SINGLE_RANGING_MODE; 
+uint8_t current_measurement_mode      = MED_RANGE;
+uint32_t led_threshold                = 300;
+uint32_t gpio_threshold               = 300;
+uint8_t averaging_size                = 4;
+uint8_t intersensor_crosstalk_delay   = 0;
+uint8_t intersensor_crosstalk_timeout = 40; //40*ticks
+uint16_t measurement_budget           = 41; //ms
+uint8_t read_interrupt                = 0;
+uint16_t signal_limit_check           = 1000;
+uint8_t sigma_limit_check             = 15;
 
-/* SPAD Calibration */
-uint32_t refSpadCount = 0;
-uint8_t ApertureSpads = 0;
-
-/* Distance Calibration */
-int32_t offsetMicroMeter = 0;
-
-/* Crosstalk (cover) Calibration */
-FixPoint1616_t xTalkCompensationRateMegaCps = 0;
-
-/* Temperature Calibrate */
-uint8_t vhvSettings = 0;
-uint8_t phaseCal = 0;
+VL53L1_CalibrationData_t * calibration_data;
+bool got_calibration_data = false;
 
 int8_t led_pulse = 0;
 uint8_t led_pulse_dir = 0;
@@ -162,12 +153,14 @@ int main(void)
     disable_analog();
 
     /* Set XSHUT to high to turn on (Shutdown is active low). */
-    XSHUT_set_level(true);
-	//_delay_ms(T_BOOT_MS);
+	//This is now done in start_init
+    //XSHUT_set_level(true);
+	//_delay_ms(T_BOOT_MS); //no longer required
 
-    /* Set sync to input and no pull mode as it's connected to MST. */
-    SYNC_set_dir(PORT_DIR_IN);
-    SYNC_set_pull_mode(PORT_PULL_OFF);
+    /* Set sync to input and no pull mode as if it's connected to MST. */
+    //This is now done in start_init
+    //SYNC_set_dir(PORT_DIR_IN);
+    //SYNC_set_pull_mode(PORT_PULL_OFF);
 
 	/* Init EEPROM */
     FLASH_0_init();
@@ -179,7 +172,12 @@ int main(void)
     if (FLASH_0_read_eeprom_byte(EEPROM_BOOTLOADER_BYTE) != 0x01)
     {
         /* ADDR Init */
+		#ifndef DEBUG
         slave_address = addr_init(is_master);
+		#else
+		slave_address = 0x08;
+		#warning Slave address set to 0x08!!!!!
+		#endif
 
 		/* Try again once more */
 		//if (slave_address == -1) slave_address = addr_init(is_master);
@@ -204,6 +202,8 @@ int main(void)
         slave_address = FLASH_0_read_eeprom_byte(EEPROM_ADDRESS_BYTE);
         FLASH_0_write_eeprom_byte(EEPROM_BOOTLOADER_BYTE, 0x00);
     }
+
+
 
     if (slave_address <= 0)
     {
@@ -243,15 +243,6 @@ int main(void)
 	/* PB6 - PCINT6 (PCMSK1) */
 	PCICR |= (1 << PCIE0);    // set PCIE0 to enable PCMSK0 scan
 	PCMSK0 |= (1 << PCINT6);  // set PCINT6 to trigger an interrupt on state change
-#ifndef DEV_DISABLE
-
-    /* Initialise history buffer */
-    hb_init(&history_buffer,averaging_size,sizeof(uint16_t));
-
-    /* Initialise Filter */
-    bwlpf_init(&low_pass_filter_state,FILTER_ORDER,SAMPLING_FREQ,FILTER_FREQUENCY);
-
-#endif
 
     /* Ranging Interrupt setup */
     /* Interrupt is active low when fired (after ranging complete), rather than high. */
@@ -267,55 +258,70 @@ int main(void)
     PCICR |= (1 << PCIE1);    // set PCIE1 to enable PCMSK1 scan
     PCMSK1 |= (1 << PCINT11);  // set PCINT11 to trigger an interrupt on state change
 
+	//TODO "De-boilerplate" this:
+
     /* Read User settings */
-    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1);
+    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1); //+1 is CRC
+
+	/* Read calibration data */
+	uint8_t * calib_ptr = (uint8_t *)calibration_data;
+
+	FLASH_0_read_eeprom_block(EEPROM_USER_CALIB_START, calib_ptr, CALIB_SIZE);
+	uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
 
     /* Check Settings CRC */
 	uint8_t crc = Crc8(settings_buffer,SETTINGS_SIZE);
+
 	if (crc == 0x00 && settings_buffer[2] == 0x00) crc = 0x01;
-    if (settings_buffer[SETTINGS_SIZE] != crc)
+    if (settings_buffer[SETTINGS_SIZE] != crc && FLASH_0_read_eeprom_byte(EEPROM_USER_CALIB_START + CALIB_SIZE + 1) != crc_calib)
     {
+	    
         read_default_settings();
     }
 
     else
     {
+	    got_calibration_data = true;
         /* Populate user settings */
         set_settings(settings_buffer);
     }
 
     /* Read device name (this can be bad, we just get the user to reprogram) */
     FLASH_0_read_eeprom_block(EEPROM_DEVICE_NAME,mappydot_name, 16);
-
-	/* Populate custom measurement profile settings */
-	FLASH_0_read_eeprom_block(EEPROM_CUSTOM_PROFILE_SETINGS, settings_buffer, CUSTOM_PROFILE_SETTINGS_SIZE);
-
-	memcpy(&custom_profile_settings[0], &settings_buffer[0], CUSTOM_PROFILE_SETTINGS_SIZE * sizeof(uint8_t));
 	
 
 	#ifdef FILL_SRAM_DEBUG
-	int16_t count = StackCount();
+	//int16_t count = StackCount();
 	#endif
 
-	/* VL53L0X Init */
+	/* VL53L1X Init */
 
 	/* Assign struct to pointer */
 	pDevice = &device;
 
-	translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
+	//translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
 
-	if (!init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), &measurement_profile,
-					  refSpadCount,ApertureSpads,offsetMicroMeter,xTalkCompensationRateMegaCps,vhvSettings,phaseCal))
+	if (!init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+					  calibration_data, got_calibration_data))
 	{
 		/* Ops we had an init failure */
 		flash_led(5,-1, 1);
 	}
 
+	#ifndef DEV_DISABLE
+
+	/* Initialise history buffer */
+	hb_init(&history_buffer,averaging_size,sizeof(uint16_t));
+
+	/* Initialise Filter */
+	bwlpf_init(&low_pass_filter_state,1000/measurement_budget,FILTER_FREQUENCY);
+
+	#endif
+
 	measurement_interrupt_fired = false;
-	resetVl53l0xInterrupt(pDevice, &status);
+	resetVL53L1Interrupt(pDevice, &status);
 
 	int32_t crosstalkTimeout = intersensor_crosstalk_timeout * 1000;
-
 
 	/* Enable PWM timer if PWM enabled */
 	if ( gpio_mode == GPIO_PWM_ENABLED) TIMER_0_init();
@@ -329,7 +335,7 @@ int main(void)
 	uint32_t no_interrupt_counter = 0;
 	#else
 	/* Start no interrupt timer */
-	if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) TIMER_2_init();
+	//if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) TIMER_2_init(); //Now set in vl53l1x.c
 	#endif
 
 
@@ -337,13 +343,15 @@ int main(void)
     while (1)
     {
 	    #ifdef NO_INT
-	    no_interrupt_counter++; //TODO check speed of this, we should be running at about 50Hz all the time.
+	    no_interrupt_counter++;
 		#endif
 	    if (!calibrating)
 		{	
 		    /* Put the microcontroller to sleep
 			   Everything after this is affected by interrupts */
-		    sleep_avr();
+		    #ifndef DEBUG
+				sleep_avr();
+			#endif
 
 			if (command_to_handle) 
 			{
@@ -357,7 +365,7 @@ int main(void)
 
 				crosstalkTimeout = intersensor_crosstalk_timeout * 1000;
 
-				startSingleRangingMeasurement(pDevice, &status, &measure);
+				startSingleRangingMeasurement(pDevice, &status);
 			} 
 		
 			if (!crosstalk_interrupt_fired && is_master && crosstalk_enabled)
@@ -382,7 +390,7 @@ int main(void)
 			{
 			#endif
 				/* We can do a fair bit of work here once the ranging has complete, 
-				* because the VL53L0X is now busy getting another range ready. */
+				* because the VL53L1X is now busy getting another range ready. */
 
 				/* Reset the no interrupt timer */
 				if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) TIMER_2_reset();
@@ -405,21 +413,24 @@ int main(void)
 				/* Read current mm */
 				readRange(pDevice, &status, &measure);
 
+				if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
+				else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+
 				error_code = measure.RangeStatus;
 				
-				/* If not phase error */
-				if (measure.RangeStatus != 4)
+				/* If phase error */
+				if (measure.RangeStatus == 4)
 				{
-					current_millimeters = measure.RangeMilliMeter;
-					distance_error = (uint32_t)measure.Sigma >> 16;
-				} else {
-					current_millimeters = 0;
+				    current_millimeters = 0;
 					distance_error = 0;
+				} else {
+					current_millimeters = measure.RangeMilliMeter;
+					distance_error = (uint32_t)measure.SigmaMilliMeter >> 16;
 				}			
 
 				/* 0 is invalid measurement */
 
-				/* Do some sanity checking (if measurement greater than 4 meters) */
+				/* Do some sanity checking */
 				if (current_millimeters >= MAX_DIST) current_millimeters = 0;
 
 				/* Valid measurements come out of the sensor as values > 30mm. */
@@ -445,6 +456,8 @@ int main(void)
 					}
 	#endif
 				}
+
+				read_interrupt = 1;
 			
 				/* Output modes */
 				if (!factory_mode) 
@@ -531,7 +544,7 @@ int main(void)
 				GPIO1_set_pull_mode(PORT_PULL_UP);
 
 				/* Reset interrupt if we have a communication timeout */
-                resetVl53l0xInterrupt(pDevice, &status);
+                resetVL53L1Interrupt(pDevice, &status);
 				
 			}
 			/* Pulse LED when in factory mode */
@@ -569,19 +582,25 @@ int main(void)
 static void read_default_settings()
 {
     /* If Bad, Check Defaults */
-    FLASH_0_read_eeprom_block(EEPROM_FACTORY_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1);
-	uint8_t crc = Crc8(settings_buffer,SETTINGS_SIZE);
+    FLASH_0_read_eeprom_block(EEPROM_FACTORY_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1); //+1 is CRC
+	uint8_t crc = Crc8(settings_buffer, SETTINGS_SIZE);
+
+	uint8_t * calib_ptr = (uint8_t *)calibration_data;
+
+	FLASH_0_read_eeprom_block(EEPROM_FACTORY_CALIB_START, calib_ptr, CALIB_SIZE);
+	uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
 
 	/* Do a sanity check on the data if 0x00 (this happens if all zeros are in EEPROM) */
 	/* settings_buffer[2] is measurement mode and shouldn't be zero */
 	if (crc == 0x00 && settings_buffer[2] == 0x00) crc = 0x01;
 
-    if (settings_buffer[SETTINGS_SIZE] != crc)
+    if (settings_buffer[SETTINGS_SIZE] != crc && FLASH_0_read_eeprom_byte(EEPROM_FACTORY_CALIB_START + CALIB_SIZE + 1) != crc_calib)
     {
         /* Flash LED 4 times */
         flash_led(100,4, 0);
 
         /* Use program defaults (do nothing) */
+		got_calibration_data = false;
 
     }
 
@@ -589,6 +608,7 @@ static void read_default_settings()
     {
         /* Populate factory settings */
         set_settings(settings_buffer);
+		got_calibration_data = true;
     }
 }
 
@@ -610,10 +630,11 @@ static void reset_vl53l0x_ranging()
 	XSHUT_set_level(true);
 
 	/* Boot time */
-	delay_ms(T_BOOT_MS);
+	//delay_ms(T_BOOT_MS);
+	waitDeviceReady(pDevice,&status);
 
-    init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), &measurement_profile,
-			        refSpadCount,ApertureSpads,offsetMicroMeter,xTalkCompensationRateMegaCps,vhvSettings,phaseCal);
+    init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+			        calibration_data, got_calibration_data);
 }
 
 /**
@@ -647,37 +668,38 @@ void main_process_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 {
     if (arg_length == 0)
-    {
+    {	
 	    if (command == 0x2e) //Hidden ADDR_IN test command
 		{
 			ADDR_IN_set_dir(PORT_DIR_OUT);
 			ADDR_IN_set_level(true);
-			delay_ms(200);
+			//delay_ms(200);
 			ADDR_IN_set_dir(PORT_DIR_IN);
 		}
-        else if (command == VL53L0X_SHUTDOWN)
+        else if (command == VL53L1X_SHUTDOWN)
         {
 		    /* Set XSHUT to low to turn off (Shutdown is active low). */
 		    XSHUT_set_level(false);
 
             //vl53l0xShutdown(device, status);
-            vl53l0x_powerstate = 0;
+            vl53l1x_powerstate = 0;
         }
 
-        else if (command == VL53L0X_NOT_SHUTDOWN)
+        else if (command == VL53L1X_NOT_SHUTDOWN)
         {
 		    /* Set XSHUT to high to turn on (Shutdown is active low). */
 		    XSHUT_set_level(true);
 			
-			delay_ms(T_BOOT_MS);
+			//delay_ms(T_BOOT_MS);
+			waitDeviceReady(pDevice,&status);
 
-			init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), &measurement_profile,
-			refSpadCount,ApertureSpads,offsetMicroMeter,xTalkCompensationRateMegaCps,vhvSettings,phaseCal);
+			init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+			calibration_data, got_calibration_data);
             //vl53l0xStartup(device, status);
-            vl53l0x_powerstate = 1;
+            vl53l1x_powerstate = 1;
         }
 
-        else if (command == RESET_VL53L0X_RANGING) //Hard reset
+        else if (command == RESET_VL53L1X_RANGING) //Hard reset
         {
 			reset_vl53l0x_ranging();
         }
@@ -686,6 +708,9 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
         {
             get_settings_buffer(settings_buffer, true);
 
+			uint8_t * calib_ptr = (uint8_t *)calibration_data;
+			uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
+
 			/* Settings buffer is always 1 longer than actual settings */
             settings_buffer[SETTINGS_SIZE] = Crc8(settings_buffer, SETTINGS_SIZE);
             if (!factory_mode)
@@ -693,12 +718,16 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			    //TODO: check crc first and only write when changes are detected.
                 FLASH_0_write_eeprom_block(EEPROM_USER_SETTINGS_START, settings_buffer, SETTINGS_SIZE + 1);
                 FLASH_0_write_eeprom_block(EEPROM_DEVICE_NAME, mappydot_name, 16);
-				FLASH_0_write_eeprom_block(EEPROM_CUSTOM_PROFILE_SETINGS, custom_profile_settings, CUSTOM_PROFILE_SETTINGS_SIZE);
+				FLASH_0_write_eeprom_block(EEPROM_USER_CALIB_START, calib_ptr, CALIB_SIZE);
+				FLASH_0_write_eeprom_byte(EEPROM_USER_CALIB_START + CALIB_SIZE + 1, crc_calib);
+
             }
 
             else
             {
                 FLASH_0_write_eeprom_block(EEPROM_FACTORY_SETTINGS_START, settings_buffer, SETTINGS_SIZE + 1);
+				FLASH_0_write_eeprom_block(EEPROM_FACTORY_CALIB_START, calib_ptr, CALIB_SIZE);
+				FLASH_0_write_eeprom_byte(EEPROM_FACTORY_CALIB_START + CALIB_SIZE + 1, crc_calib);
             }
         }
 
@@ -709,46 +738,44 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
             crosstalk_enabled = true;
             //Set to single ranging mode
 
-            setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
+            setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
         }
 
         else if (command == INTERSENSOR_CROSSTALK_REDUCTION_DISABLE)
         {
             crosstalk_enabled = false;
 
-            if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+            if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
         }
+
+		else if (command == ENABLE_CROSSTALK_COMPENSATION)
+		{
+			setCrosstalk(pDevice, &status, 1);
+		}
+
+		else if (command == DISABLE_CROSSTALK_COMPENSATION)
+		{
+			setCrosstalk(pDevice, &status, 0);
+		}
 
         else if (command == CALIBRATE_SPAD) 
 		{
 		    calibrating = true;
 			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if(calibrateSPAD(pDevice, &status,&refSpadCount,&ApertureSpads) == 1) //returns 0 if success
+		    if(calibrateSPAD(pDevice, &status,calibration_data) == 1) //returns 0 if success
 			    flash_led(500,4,0); //error
 			else
-				flash_led(200,1,0);
+				{
+					flash_led(200,1,0);
+					got_calibration_data = true;
+				}
 
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 			calibrating = false;
         }
-        else if (command == TEMPERATURE_CALIBRATION) 
-		{
-			calibrating = true;
-			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
-
-		    if(calibrateTemperature(pDevice, &status,&vhvSettings,&phaseCal) == 1) //returns 0 if success
-			    flash_led(500,4,0); //error
-			else
-			    flash_led(200,1,0);
-
-			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
-			calibrating = false;
-		}
 
         else if (command == FILTERING_ENABLE) filtering_enabled = true;
 
@@ -771,7 +798,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
             current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
 
             if (crosstalk_enabled != 1) { 
-				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 			}
 
         }
@@ -779,11 +806,12 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
         else if (command == SET_SINGLE_RANGING_MODE)
         {
             current_ranging_mode = SET_SINGLE_RANGING_MODE;
-            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
         }
 
         else if (command == PERFORM_SINGLE_RANGE) {
-			if (current_ranging_mode == SET_SINGLE_RANGING_MODE) startSingleRangingMeasurement(pDevice, &status, &measure);
+			if (current_ranging_mode == SET_SINGLE_RANGING_MODE) 
+				startSingleRangingMeasurement(pDevice, &status);
 		}
     }
 
@@ -802,6 +830,11 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
             while(1); //loop
         }
+
+		else if (command == SIGMA_LIMIT_CHECK_VALUE) {
+			signal_limit_check = arg[0]; 
+			setLimitChecks(pDevice,&status,signal_limit_check,sigma_limit_check);
+		}
 
         else if (command == INTERSENSOR_CROSSTALK_TIMEOUT) intersensor_crosstalk_timeout = arg[0];
 
@@ -851,21 +884,20 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
         else if (command == RANGING_MEASUREMENT_MODE)
         {
             //Should check, but we need to save space.
-            /*if (*arg[0] == HIGHLY_ACCURATE ||
-            	*arg[0] == HIGH_SPEED ||
-            	*arg[0] == MAPPYDOT_MODE ||
-            	*arg[0] == LONG_RANGE ||
-            	*arg[0] == VL53L0X_DEFAULT)
+            /*if (*arg[0] == SHORT_RANGE ||
+            	*arg[0] == MED_RANGE ||
+            	*arg[0] == LONG_RANGE)
             {*/
             current_measurement_mode = arg[0];
 
-			//Set to single ranging mode (stop measurement)
-	        setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
+		    stopContinuous(pDevice,&status);
+
 			//Change to selected measurement mode
-			translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
-            setRangingMeasurementMode(pDevice, &status, &measurement_profile);
+			//translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
+            setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget);
+
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 
 			//reset_vl53l0x_ranging();
 
@@ -874,52 +906,91 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
     else if (arg_length == 2)
     {
-        if (command == SET_GPIO_THRESHOLD_DISTANCE_IN_MM) gpio_threshold = bytes_to_mm(arg);
+        if (command == SET_GPIO_THRESHOLD_DISTANCE_IN_MM) gpio_threshold = bytes_to_mm(arg[0],arg[1]);
 
-        else if (command == SET_LED_THRESHOLD_DISTANCE_IN_MM) led_threshold = bytes_to_mm(arg);
+        else if (command == SET_LED_THRESHOLD_DISTANCE_IN_MM) led_threshold = bytes_to_mm(arg[0],arg[1]);
+
+		else if (command == MEASUREMENT_BUDGET) {
+			measurement_budget = bytes_to_mm(arg[0],arg[1]);
+			if (measurement_budget < 10) measurement_budget = 10;
+			else if (measurement_budget > 1000) measurement_budget = 1000;
+			//TODO consolidate this reset into one function
+			stopContinuous(pDevice,&status);
+			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget);
+			#ifndef DEV_DISABLE
+			/* Initialise Filter */
+			bwlpf_init(&low_pass_filter_state,1000/measurement_budget,FILTER_FREQUENCY);
+			#endif
+			//Reset back to original ranging mode
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+		}
+
+		else if (command == SIGNAL_LIMIT_CHECK_VALUE) {
+			signal_limit_check = bytes_to_mm(arg[0],arg[1]);
+			setLimitChecks(pDevice,&status,signal_limit_check,sigma_limit_check);
+		}
 
         else if (command == CALIBRATE_DISTANCE_OFFSET) {
 		    calibrating = true;
 			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-			if(calibrateSPAD(pDevice, &status,&refSpadCount,&ApertureSpads) == 0) //returns 0 if success
+			if(calibrateSPAD(pDevice, &status, calibration_data) == 0) //returns 0 if success
 			{
-				if(calibrateTemperature(pDevice, &status,&vhvSettings,&phaseCal) == 0) //returns 0 if success
-				{
-					if (calibrateDistanceOffset(pDevice, &status,bytes_to_mm(arg),&offsetMicroMeter) == 0)  //returns 0 if success
+				//if(calibrateTemperature(pDevice, &status,&vhvSettings,&phaseCal) == 0) //returns 0 if success
+				//{
+					if (calibrateDistanceOffset(pDevice, &status,calibration_data,bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
+					{
 						flash_led(200,1,0);
+						got_calibration_data = true;
+					}
 					else
 						flash_led(500,4,0); //error
-				} else {
-					flash_led(500,4,0); //error
-				}
+				//} else {
+				//	flash_led(500,4,0); //error
+				//}
 			} else {
 					flash_led(500,4,0); //error
 			}
 
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 
 			calibrating = false;
 		}	    
 
+		//The order the calibration functions are called does matter : RefSPAD first, offset second and crosstalk third.
+
         else if (command == CALIBRATE_CROSSTALK) {
 		    calibrating = true;
 			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if (calibrateCrosstalk(pDevice, &status,bytes_to_mm(arg),&xTalkCompensationRateMegaCps))  //returns 0 if success
+		    if (calibrateCrosstalk(pDevice, &status, calibration_data, bytes_to_mm(arg[0],arg[1])))  //returns 0 if success
 				flash_led(500,4,0); //error
 			else
+			{
 				flash_led(200,1,0);
+				got_calibration_data = true;
+			}
 
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 			calibrating = false;
 		        
 		}
     }
+	else if (arg_length == 4)
+	{
+		if (command == REGION_OF_INTEREST)
+		{
+			ROI.TopLeftX = arg[0] % 16;
+			ROI.TopLeftY = arg[1] % 16;
+			ROI.BotRightX = arg[2] % 16;
+			ROI.BotRightY = arg[3] % 16;
+			setRegionOfInterest(pDevice,&status,&ROI);
+		}
+	}
 
     else if (arg_length == 6)
     {
@@ -933,19 +1004,10 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 					if (factory_mode)
 					{
 						TIMER_1_init();
-						led_pulse = 0;
+						//led_pulse = 0;
 					}
 				}
     }
-
-	else if (arg_length == CUSTOM_PROFILE_SETTINGS_SIZE)
-	{
-		if (command == CUSTOM_PROFILE)
-		{
-			memcpy(custom_profile_settings, arg, CUSTOM_PROFILE_SETTINGS_SIZE);
-		}
-	}
-
     else if (arg_length == 16)
     {
         if (command == NAME_DEVICE)
@@ -969,47 +1031,32 @@ static void get_settings_buffer(uint8_t * buffer, bool store_settings)
 {
     uint8_t tmp_buffer[2];
 
-    //ignore this if storing settings as it's irrelevant. We do this to save code space, rather than making a special case for it
-    if (!store_settings) buffer[0] = (device.Data.CurrentParameters.MeasurementTimingBudgetMicroSeconds / 1000) & 0xff;
-
-    buffer[1] = current_ranging_mode;
-    buffer[2] = current_measurement_mode;
-    buffer[3] = led_mode;
+    
+    buffer[0] = (measurement_budget >> 8 ) & 0xff;
+    buffer[1] = (measurement_budget      ) & 0xff;
+    buffer[2] = current_ranging_mode;
+    buffer[3] = current_measurement_mode;
+    buffer[4] = led_mode;
     mm_to_bytes(tmp_buffer, led_threshold);
-    buffer[4] = tmp_buffer[0];
-    buffer[5] = tmp_buffer[1];
-    buffer[6] = gpio_mode;
+    buffer[5] = tmp_buffer[0];
+    buffer[6] = tmp_buffer[1];
+    buffer[7] = gpio_mode;
     mm_to_bytes(tmp_buffer, gpio_threshold);
-    buffer[7] = tmp_buffer[0];
-    buffer[8] = tmp_buffer[1];
-    buffer[9] = filtering_enabled;
-	buffer[10] = averaging_enabled;
-	buffer[11] = averaging_size;
-    buffer[12] = crosstalk_enabled;
-    buffer[13] = intersensor_crosstalk_delay;
-	buffer[14] = intersensor_crosstalk_timeout;
-    buffer[15] = vl53l0x_powerstate;
+    buffer[8] = tmp_buffer[0];
+    buffer[9] = tmp_buffer[1];
+    buffer[10] = filtering_enabled;
+	buffer[11] = averaging_enabled;
+	buffer[12] = averaging_size;
+    buffer[13] = crosstalk_enabled;
+    buffer[14] = intersensor_crosstalk_delay;
+	buffer[15] = intersensor_crosstalk_timeout;
+    buffer[16] = vl53l1x_powerstate;
     if (store_settings) { 
-	    /* SPAD Calibration */
-	    buffer[16] = (refSpadCount >> 24) & 0xff; 
-        buffer[17] = (refSpadCount >> 16) & 0xff;
-		buffer[18] = (refSpadCount >> 8 ) & 0xff;
-		buffer[19] = (refSpadCount      ) & 0xff;
-		buffer[20] = ApertureSpads;
-
-	    /* Distance Calibration */
-		buffer[21] = (offsetMicroMeter >> 24) & 0xff; 
-		buffer[22] = (offsetMicroMeter >> 16) & 0xff; 
-		buffer[23] = (offsetMicroMeter >> 8 ) & 0xff; 
-		buffer[24] = (offsetMicroMeter      ) & 0xff; 
-
-	    /* Crosstalk (cover) Calibration */
-		buffer[25] = (xTalkCompensationRateMegaCps >> 24) & 0xff;
-		buffer[26] = (xTalkCompensationRateMegaCps >> 16) & 0xff;
-		buffer[27] = (xTalkCompensationRateMegaCps >> 8 ) & 0xff;
-		buffer[28] = (xTalkCompensationRateMegaCps      ) & 0xff;
+	    /* Calibration */
+	    //calibration_data
 
 	}
+
 }
 
 
@@ -1022,36 +1069,23 @@ static void get_settings_buffer(uint8_t * buffer, bool store_settings)
  */
 static void set_settings(uint8_t * buffer)
 {
-    uint8_t tmp_buffer[2];
-    //buffer [0] is just zero (for settings get resuse)
-    current_ranging_mode = buffer[1];
-    current_measurement_mode = buffer[2];
-    led_mode = buffer[3];
-    tmp_buffer[0] = buffer[4];
-    tmp_buffer[1] = buffer[5];
-    led_threshold = bytes_to_mm(tmp_buffer);
-    gpio_mode = buffer[6];
-    tmp_buffer[0] = buffer[7];
-    tmp_buffer[1] = buffer[8];
-    gpio_threshold = bytes_to_mm(tmp_buffer);
-    filtering_enabled = buffer[9];
-	averaging_enabled = buffer[10];
-	averaging_size = buffer[11];
-    crosstalk_enabled = buffer[12];
-    intersensor_crosstalk_delay = buffer[13];
-	intersensor_crosstalk_timeout = buffer[14];
-    vl53l0x_powerstate = buffer[15];
+    //uint8_t tmp_buffer[2];
+    measurement_budget = bytes_to_mm(buffer[0],buffer[1]);
+    current_ranging_mode = buffer[2];
+    current_measurement_mode = buffer[3];
+    led_mode = buffer[4];
+    led_threshold = bytes_to_mm(buffer[5],buffer[6]);
+    gpio_mode = buffer[7];
+    gpio_threshold = bytes_to_mm(buffer[8],buffer[9]);
+    filtering_enabled = buffer[10];
+	averaging_enabled = buffer[11];
+	averaging_size = buffer[12];
+    crosstalk_enabled = buffer[13];
+    intersensor_crosstalk_delay = buffer[14];
+	intersensor_crosstalk_timeout = buffer[15];
+    vl53l1x_powerstate = buffer[16];
 
-	
-	/* SPAD Calibration */
-	refSpadCount = (uint32_t)buffer[16] << 24 | (uint32_t)buffer[17] << 16 | (uint32_t)buffer[18] << 8 | buffer[19];
-	ApertureSpads = buffer[20];
-
-	/* Distance Calibration */
-	offsetMicroMeter = (uint32_t)buffer[21] << 24 | (uint32_t)buffer[22] << 16 | (uint32_t)buffer[23] << 8 | buffer[24];
-
-	/* Crosstalk (cover) Calibration */
-	xTalkCompensationRateMegaCps = (uint32_t)buffer[25] << 24 | (uint32_t)buffer[26] << 16 | (uint32_t)buffer[27] << 8 | buffer[28];
+	//calibration_data TODO
 	
 }
 
@@ -1068,6 +1102,7 @@ uint8_t main_process_tx_command(uint8_t command, uint8_t * tx_buffer)
     if (command == READ_DISTANCE)
     {
         mm_to_bytes(tx_buffer, filtered_distance);
+		read_interrupt = 0;
         return 2;
     }
 
@@ -1083,6 +1118,12 @@ uint8_t main_process_tx_command(uint8_t command, uint8_t * tx_buffer)
         return 1;
     }
 
+	else if (command == CHECK_INTERRUPT)
+	{
+		tx_buffer[0] = read_interrupt;
+		return 1;
+	}
+
     else if (command == DEVICE_NAME)
     {
         memcpy(tx_buffer, mappydot_name, 16);
@@ -1092,7 +1133,7 @@ uint8_t main_process_tx_command(uint8_t command, uint8_t * tx_buffer)
     else if (command == READ_CURRENT_SETTINGS)
     {
         get_settings_buffer(tx_buffer, false);
-        return 16;
+        return 17;
     }
 
     else if (command == READ_NONFILTERED_VALUE)

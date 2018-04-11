@@ -31,7 +31,6 @@
 #define _VL53L1_PLATFORM_H_
 
 #include "vl53l1_ll_def.h"
-#include "vl53l1_platform_log.h"
 
 #define VL53L1_IPP_API
 #include "vl53l1_platform_ipp_imports.h"
@@ -62,9 +61,7 @@ extern "C"
  */
 
 VL53L1_Error VL53L1_CommsInitialise(
-	VL53L1_Dev_t *pdev,
-	uint8_t       comms_type,
-	uint16_t      comms_speed_khz);
+	VL53L1_Dev_t *pdev);
 
 
 /**
@@ -261,29 +258,6 @@ VL53L1_Error VL53L1_WaitUs(
 VL53L1_Error VL53L1_WaitMs(
 		VL53L1_Dev_t *pdev,
 		int32_t       wait_ms);
-
-
-/**
-* @brief Get the frequency of the timer used for ranging results time stamps
-*
-* @param[out] ptimer_freq_hz : pointer for timer frequency
-*
- * @return  VL53L1_ERROR_NONE     Success
- * @return  "Other error code"    See ::VL53L1_Error
-*/
-
-VL53L1_Error VL53L1_GetTimerFrequency(int32_t *ptimer_freq_hz);
-
-/**
-* @brief Get the timer value in units of timer_freq_hz (see VL53L1_get_timestamp_frequency())
-*
-* @param[out] ptimer_count : pointer for timer count value
-*
- * @return  VL53L1_ERROR_NONE     Success
- * @return  "Other error code"    See ::VL53L1_Error
-*/
-
-VL53L1_Error VL53L1_GetTimerValue(int32_t *ptimer_count);
 
 
 /**

@@ -36,19 +36,21 @@ Copyright (C) 2016, STMicroelectronics International N.V.
 
 #include "vl53l1_ll_def.h"
 #include "vl53l1_platform.h"
-#include "vl53l1_platform_log.h"
 #include "vl53l1_core.h"
 #include "vl53l1_register_map.h"
 #include "vl53l1_register_structs.h"
 #include "vl53l1_register_funcs.h"
 
-#define LOG_FUNCTION_START(fmt, ...) \
+/*#define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_REGISTERS, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_REGISTERS, status, ##__VA_ARGS__)
 #define LOG_FUNCTION_END_FMT(status, fmt, ...) \
-	_LOG_FUNCTION_END_FMT(VL53L1_TRACE_MODULE_REGISTERS, status, fmt, ##__VA_ARGS__)
+	_LOG_FUNCTION_END_FMT(VL53L1_TRACE_MODULE_REGISTERS, status, fmt, ##__VA_ARGS__)*/
 
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
 
 VL53L1_Error VL53L1_i2c_encode_static_nvm_managed(
 	VL53L1_static_nvm_managed_t *pdata,
@@ -2228,14 +2230,14 @@ VL53L1_Error VL53L1_i2c_decode_nvm_copy_data(
 	if (VL53L1_NVM_COPY_DATA_I2C_SIZE_BYTES > buf_size)
 		return VL53L1_ERROR_COMMS_BUFFER_TOO_SMALL;
 
-	pdata->identification__model_id =
+	/*pdata->identification__model_id =
 		(*(pbuffer +   0));
 	pdata->identification__module_type =
 		(*(pbuffer +   1));
 	pdata->identification__revision_id =
 		(*(pbuffer +   2));
 	pdata->identification__module_id =
-		(VL53L1_i2c_decode_uint16_t(2, pbuffer +   3));
+		(VL53L1_i2c_decode_uint16_t(2, pbuffer +   3));*/
 	pdata->ana_config__fast_osc__trim_max =
 		(*(pbuffer +   5)) & 0x7F;
 	pdata->ana_config__fast_osc__freq_set =

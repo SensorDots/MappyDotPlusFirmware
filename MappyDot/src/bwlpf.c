@@ -40,25 +40,27 @@
 #include <math.h>
 #include "bwlpf.h"
 
-void bwlpf_init(filter_state * filter, uint8_t filter_order, uint8_t sampling_frequency, uint8_t half_power_freq)
+void bwlpf_init(filter_state * filter, uint16_t sampling_frequency, uint8_t half_power_freq)
 {
     //n = filter order 2,4,6,...
     //s = sampling frequency
     //f = half power frequency
+
     int i = 0;
-    filter->n = filter_order/2;
+    filter->n = FILTER_ORDER/2;
     filter->s = sampling_frequency;
     filter->f = half_power_freq;
     filter->a = tan(M_PI*filter->f/filter->s);
     filter->a2 = filter->a*filter->a;
     filter->r = 0;
-    filter->A = (double *)malloc(filter->n*sizeof(double));
-    filter->d1 = (double *)malloc(filter->n*sizeof(double));
-    filter->d2 = (double *)malloc(filter->n*sizeof(double));
-    filter->w0 = (double *)calloc(filter->n, sizeof(double));
-    filter->w1 = (double *)calloc(filter->n, sizeof(double));
-    filter->w2 = (double *)calloc(filter->n, sizeof(double));
-
+	/*if (full_init) {
+		filter->A = (double *)malloc(filter->n*sizeof(double));
+		filter->d1 = (double *)malloc(filter->n*sizeof(double));
+		filter->d2 = (double *)malloc(filter->n*sizeof(double));
+		filter->w0 = (double *)calloc(filter->n, sizeof(double));
+		filter->w1 = (double *)calloc(filter->n, sizeof(double));
+		filter->w2 = (double *)calloc(filter->n, sizeof(double));
+	}*/
 
 
     for(i=0; i<filter->n; ++i)
@@ -73,20 +75,26 @@ void bwlpf_init(filter_state * filter, uint8_t filter_order, uint8_t sampling_fr
         filter->w1[i] = 0;
         filter->w2[i] = 0;
     }
+
+	if (sampling_frequency < 12) //If less than 12Hz, disable
+		filter->enabled = 0;
+	else
+		filter->enabled = 1;
+	
 }
 
 uint16_t bwlpf(uint16_t next_sample, filter_state * filter )
 {
     int i = 0;
     double x = next_sample;
-
-    for(i=0; i<filter->n; ++i)
-    {
-        filter->w0[i] = filter->d1[i]*filter->w1[i] + filter->d2[i]*filter->w2[i] + x;
-        x = filter->A[i]*(filter->w0[i] + 2.0*filter->w1[i] + filter->w2[i]);
-        filter->w2[i] = filter->w1[i];
-        filter->w1[i] = filter->w0[i];
-    }
-
+	if (filter->enabled) {
+		for(i=0; i<filter->n; ++i)
+		{
+			filter->w0[i] = filter->d1[i]*filter->w1[i] + filter->d2[i]*filter->w2[i] + x;
+			x = filter->A[i]*(filter->w0[i] + 2.0*filter->w1[i] + filter->w2[i]);
+			filter->w2[i] = filter->w1[i];
+			filter->w1[i] = filter->w0[i];
+		}
+	}
     return (uint16_t)x;
 }

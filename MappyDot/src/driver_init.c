@@ -189,7 +189,7 @@ void system_init()
         // <id> pad_initial_level
         // <false"> Low
         // <true"> High
-        false);
+        true);
 
     /* PORT setting on PC3 */
     // Set pin direction to input

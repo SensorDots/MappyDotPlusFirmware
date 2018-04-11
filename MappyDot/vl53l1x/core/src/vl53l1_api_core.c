@@ -51,19 +51,26 @@
 #include "vl53l1_api_debug.h"
 #endif
 
-#define LOG_FUNCTION_START(fmt, ...) \
+/*#define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_CORE, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_CORE, status, ##__VA_ARGS__)
 #define LOG_FUNCTION_END_FMT(status, fmt, ...) \
 	_LOG_FUNCTION_END_FMT(VL53L1_TRACE_MODULE_CORE, status, \
-	fmt, ##__VA_ARGS__)
+	fmt, ##__VA_ARGS__)*/
 
-#define trace_print(level, ...) \
+	/*#define trace_print(level, ...) \
 	_LOG_TRACE_PRINT(VL53L1_TRACE_MODULE_CORE, \
-	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)
+	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)*/
 
-#define VL53L1_MAX_I2C_XFER_SIZE 256
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
+#define trace_print(level, ...)
+
+
+
+#define VL53L1_MAX_I2C_XFER_SIZE 180 //256
 
 #ifdef VL53L1_DEBUG
 VL53L1_Error VL53L1_get_version(
@@ -127,12 +134,13 @@ VL53L1_Error VL53L1_data_init(
 	VL53L1_LLDriverData_t    *pdev =
 			VL53L1DevStructGetLLDriverHandle(Dev);
 
-	VL53L1_init_ll_driver_state(
-			Dev,
-			VL53L1_DEVICESTATE_UNKNOWN);
+	//VL53L1_init_ll_driver_state(
+	//		Dev,
+	//		VL53L1_DEVICESTATE_UNKNOWN);
 
-	pdev->wait_method             = VL53L1_WAIT_METHOD_BLOCKING;
+	//pdev->wait_method             = VL53L1_WAIT_METHOD_BLOCKING;
 	pdev->preset_mode             = VL53L1_DEVICEPRESETMODE_STANDARD_RANGING;
+	//pdev->preset_mode             = VL53L1_DEVICEPRESETMODE_LOWPOWERAUTO_LONG_RANGE;
 	pdev->measurement_mode        = VL53L1_DEVICEMEASUREMENTMODE_STOP;
 
 	pdev->offset_calibration_mode =
@@ -155,7 +163,7 @@ VL53L1_Error VL53L1_data_init(
 	/*
 	 * Initialise version structure
 	 */
-	VL53L1_init_version(Dev);
+	//VL53L1_init_version(Dev);
 
 	/*
 	 *  For C-API one time initialization only read device G02 registers
@@ -571,6 +579,8 @@ VL53L1_Error VL53L1_set_inter_measurement_period_ms(
 	 * Convenience function for setting the inter measurement period
 	 */
 
+
+
 	VL53L1_Error  status = VL53L1_ERROR_NONE;
 	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
 
@@ -612,7 +622,7 @@ VL53L1_Error VL53L1_get_inter_measurement_period_ms(
 		*pinter_measurement_period_ms = \
 			pdev->tim_cfg.system__intermeasurement_period /
 			(uint32_t)pdev->dbg_results.result__osc_calibrate_val;
-
+    
 
 	LOG_FUNCTION_END(status);
 
@@ -1143,7 +1153,7 @@ VL53L1_Error VL53L1_get_preset_mode_timing_cfg(
 	case VL53L1_DEVICEPRESETMODE_STANDARD_RANGING_LONG_RANGE:
 	case VL53L1_DEVICEPRESETMODE_STANDARD_RANGING_MM1_CAL:
 	case VL53L1_DEVICEPRESETMODE_STANDARD_RANGING_MM2_CAL:
-	case VL53L1_DEVICEPRESETMODE_OLT:
+	//case VL53L1_DEVICEPRESETMODE_OLT:
 		*pdss_config__target_total_rate_mcps =
 				pdev->tuning_parms.tp_dss_target_lite_mcps;
 		*pphasecal_config_timeout_us =
@@ -1154,7 +1164,7 @@ VL53L1_Error VL53L1_get_preset_mode_timing_cfg(
 				pdev->tuning_parms.tp_range_timeout_lite_us;
 	break;
 
-	case VL53L1_DEVICEPRESETMODE_TIMED_RANGING:
+	/*case VL53L1_DEVICEPRESETMODE_TIMED_RANGING:
 	case VL53L1_DEVICEPRESETMODE_TIMED_RANGING_SHORT_RANGE:
 	case VL53L1_DEVICEPRESETMODE_TIMED_RANGING_LONG_RANGE:
 	case VL53L1_DEVICEPRESETMODE_SINGLESHOT_RANGING:
@@ -1179,7 +1189,7 @@ VL53L1_Error VL53L1_get_preset_mode_timing_cfg(
 				pdev->tuning_parms.tp_mm_timeout_lpa_us;
 		*prange_config_timeout_us =
 				pdev->tuning_parms.tp_range_timeout_lpa_us;
-	break;
+	break;*/
 
 	default:
 		status = VL53L1_ERROR_INVALID_PARAMS;
@@ -1217,8 +1227,8 @@ VL53L1_Error VL53L1_set_preset_mode(
 	VL53L1_dynamic_config_t       *pdynamic      = &(pdev->dyn_cfg);
 	VL53L1_system_control_t       *psystem       = &(pdev->sys_ctrl);
 	VL53L1_tuning_parm_storage_t  *ptuning_parms = &(pdev->tuning_parms);
-	VL53L1_low_power_auto_data_t  *plpadata      =
-					&(pdev->low_power_auto_data);
+	//VL53L1_low_power_auto_data_t  *plpadata      =
+	//				&(pdev->low_power_auto_data);
 
 	LOG_FUNCTION_START("");
 
@@ -1230,9 +1240,9 @@ VL53L1_Error VL53L1_set_preset_mode(
 
 	/* Reset LL Driver state variables */
 
-	VL53L1_init_ll_driver_state(
-			Dev,
-			VL53L1_DEVICESTATE_SW_STANDBY);
+	//VL53L1_init_ll_driver_state(
+	//		Dev,
+	//		VL53L1_DEVICESTATE_SW_STANDBY);
 
 	/* apply selected preset */
 
@@ -1290,7 +1300,7 @@ VL53L1_Error VL53L1_set_preset_mode(
 		break;
 #endif
 
-	case VL53L1_DEVICEPRESETMODE_TIMED_RANGING:
+	/*case VL53L1_DEVICEPRESETMODE_TIMED_RANGING:
 		status = VL53L1_preset_mode_timed_ranging(
 					pstatic,
 					pgeneral,
@@ -1319,8 +1329,8 @@ VL53L1_Error VL53L1_set_preset_mode(
 					psystem,
 					ptuning_parms);
 		break;
-
-	case VL53L1_DEVICEPRESETMODE_OLT:
+		*/
+	/*case VL53L1_DEVICEPRESETMODE_OLT:
 		status = VL53L1_preset_mode_olt(
 					pstatic,
 					pgeneral,
@@ -1328,9 +1338,9 @@ VL53L1_Error VL53L1_set_preset_mode(
 					pdynamic,
 					psystem,
 					ptuning_parms);
-		break;
+		break;*/
 
-	case VL53L1_DEVICEPRESETMODE_SINGLESHOT_RANGING:
+	/*case VL53L1_DEVICEPRESETMODE_SINGLESHOT_RANGING:
 		status = VL53L1_preset_mode_singleshot_ranging(
 					pstatic,
 					pgeneral,
@@ -1338,8 +1348,8 @@ VL53L1_Error VL53L1_set_preset_mode(
 					pdynamic,
 					psystem,
 					ptuning_parms);
-		break;
-
+		break;*/
+/*
 	case VL53L1_DEVICEPRESETMODE_LOWPOWERAUTO_SHORT_RANGE:
 		status = VL53L1_preset_mode_low_power_auto_short_ranging(
 					pstatic,
@@ -1372,7 +1382,7 @@ VL53L1_Error VL53L1_set_preset_mode(
 					ptuning_parms,
 					plpadata);
 		break;
-
+		*/
 	default:
 		status = VL53L1_ERROR_INVALID_PARAMS;
 		break;
@@ -2110,11 +2120,11 @@ VL53L1_Error VL53L1_init_and_start_range(
 	/*
 	 * Update LL Driver State
 	 */
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_update_ll_driver_rd_state(Dev);
+	//if (status == VL53L1_ERROR_NONE)
+	//	status = VL53L1_update_ll_driver_rd_state(Dev);
 
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_update_ll_driver_cfg_state(Dev);
+	//if (status == VL53L1_ERROR_NONE)
+	//	status = VL53L1_update_ll_driver_cfg_state(Dev);
 
 	LOG_FUNCTION_END(status);
 
@@ -2150,9 +2160,9 @@ VL53L1_Error VL53L1_stop_range(
 			(pdev->sys_ctrl.system__mode_start & VL53L1_DEVICEMEASUREMENTMODE_STOP_MASK);
 
 	/* reset zone dynamic info */
-	VL53L1_init_ll_driver_state(
-			Dev,
-			VL53L1_DEVICESTATE_SW_STANDBY);
+	//VL53L1_init_ll_driver_state(
+	//		Dev,
+	//		VL53L1_DEVICESTATE_SW_STANDBY);
 
 	/* reset low power auto */
 	if (pdev->low_power_auto_data.is_low_power_auto_mode == 1)
@@ -2343,8 +2353,8 @@ VL53L1_Error VL53L1_get_device_results(
 	 * If not an error is raised
 	 */
 
-	if (status == VL53L1_ERROR_NONE)
-		status = VL53L1_check_ll_driver_rd_state(Dev);
+	//if (status == VL53L1_ERROR_NONE)
+	//	status = VL53L1_check_ll_driver_rd_state(Dev);
 
 #ifdef VL53L1_LOG_ENABLE
 	if (status == VL53L1_ERROR_NONE)
@@ -2418,7 +2428,7 @@ void VL53L1_copy_sys_and_core_results_to_range_results(
 	for (i = 0 ; i < 2 ; i++) {
 
 		pdata->range_id     = i;
-		pdata->time_stamp   = 0;
+		//pdata->time_stamp   = 0;
 
 		if ((psys->result__stream_count == 0) &&
 			((psys->result__range_status & VL53L1_RANGE_STATUS__RANGE_STATUS_MASK) ==
@@ -2570,128 +2580,128 @@ void VL53L1_copy_sys_and_core_results_to_range_results(
  * Configure the GPIO interrupt config, from the given input
  */
 
-VL53L1_Error VL53L1_set_GPIO_interrupt_config(
-	VL53L1_DEV                      Dev,
-	VL53L1_GPIO_Interrupt_Mode	intr_mode_distance,
-	VL53L1_GPIO_Interrupt_Mode	intr_mode_rate,
-	uint8_t				intr_new_measure_ready,
-	uint8_t				intr_no_target,
-	uint8_t				intr_combined_mode,
-	uint16_t			thresh_distance_high,
-	uint16_t			thresh_distance_low,
-	uint16_t			thresh_rate_high,
-	uint16_t			thresh_rate_low
-	)
-{
-	VL53L1_Error  status = VL53L1_ERROR_NONE;
-
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
-	VL53L1_GPIO_interrupt_config_t *pintconf = &(pdev->gpio_interrupt_config);
-
-	LOG_FUNCTION_START("");
-
-	/* update local data structure */
-	pintconf->intr_mode_distance = intr_mode_distance;
-	pintconf->intr_mode_rate = intr_mode_rate;
-	pintconf->intr_new_measure_ready = intr_new_measure_ready;
-	pintconf->intr_no_target = intr_no_target;
-	pintconf->intr_combined_mode = intr_combined_mode;
-	pintconf->threshold_distance_high = thresh_distance_high;
-	pintconf->threshold_distance_low = thresh_distance_low;
-	pintconf->threshold_rate_high = thresh_rate_high;
-	pintconf->threshold_rate_low = thresh_rate_low;
-
-	/* encoded interrupt config */
-	pdev->gen_cfg.system__interrupt_config_gpio =
-		VL53L1_encode_GPIO_interrupt_config(pintconf);
-
-
-	/* set thresholds */
-	status = VL53L1_set_GPIO_thresholds_from_struct(
-			Dev,
-			pintconf);
-
-	LOG_FUNCTION_END(status);
-	return status;
-}
+//VL53L1_Error VL53L1_set_GPIO_interrupt_config(
+	//VL53L1_DEV                      Dev,
+	//VL53L1_GPIO_Interrupt_Mode	intr_mode_distance,
+	//VL53L1_GPIO_Interrupt_Mode	intr_mode_rate,
+	//uint8_t				intr_new_measure_ready,
+	//uint8_t				intr_no_target,
+	//uint8_t				intr_combined_mode,
+	//uint16_t			thresh_distance_high,
+	//uint16_t			thresh_distance_low,
+	//uint16_t			thresh_rate_high,
+	//uint16_t			thresh_rate_low
+	//)
+//{
+	//VL53L1_Error  status = VL53L1_ERROR_NONE;
+//
+	//VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
+	//VL53L1_GPIO_interrupt_config_t *pintconf = &(pdev->gpio_interrupt_config);
+//
+	//LOG_FUNCTION_START("");
+//
+	///* update local data structure */
+	//pintconf->intr_mode_distance = intr_mode_distance;
+	//pintconf->intr_mode_rate = intr_mode_rate;
+	//pintconf->intr_new_measure_ready = intr_new_measure_ready;
+	//pintconf->intr_no_target = intr_no_target;
+	//pintconf->intr_combined_mode = intr_combined_mode;
+	//pintconf->threshold_distance_high = thresh_distance_high;
+	//pintconf->threshold_distance_low = thresh_distance_low;
+	//pintconf->threshold_rate_high = thresh_rate_high;
+	//pintconf->threshold_rate_low = thresh_rate_low;
+//
+	///* encoded interrupt config */
+	//pdev->gen_cfg.system__interrupt_config_gpio =
+		//VL53L1_encode_GPIO_interrupt_config(pintconf);
+//
+//
+	///* set thresholds */
+	//status = VL53L1_set_GPIO_thresholds_from_struct(
+			//Dev,
+			//pintconf);
+//
+	//LOG_FUNCTION_END(status);
+	//return status;
+//}
 
 /*
  * Configure the GPIO interrupt config, from the given structure
  */
 
-VL53L1_Error VL53L1_set_GPIO_interrupt_config_struct(
-	VL53L1_DEV                      Dev,
-	VL53L1_GPIO_interrupt_config_t	intconf)
-{
-	VL53L1_Error  status = VL53L1_ERROR_NONE;
-
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
-	VL53L1_GPIO_interrupt_config_t *pintconf = &(pdev->gpio_interrupt_config);
-
-	LOG_FUNCTION_START("");
-
-	 /* using memcpy(dst, src, size in bytes) */
-	memcpy(pintconf, &(intconf), sizeof(VL53L1_GPIO_interrupt_config_t));
-
-	/* encoded interrupt config */
-	pdev->gen_cfg.system__interrupt_config_gpio =
-		VL53L1_encode_GPIO_interrupt_config(pintconf);
-
-	/* set thresholds */
-	status = VL53L1_set_GPIO_thresholds_from_struct(
-			Dev,
-			pintconf);
-
-	LOG_FUNCTION_END(status);
-	return status;
-}
+//VL53L1_Error VL53L1_set_GPIO_interrupt_config_struct(
+	//VL53L1_DEV                      Dev,
+	//VL53L1_GPIO_interrupt_config_t	intconf)
+//{
+	//VL53L1_Error  status = VL53L1_ERROR_NONE;
+//
+	//VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
+	//VL53L1_GPIO_interrupt_config_t *pintconf = &(pdev->gpio_interrupt_config);
+//
+	//LOG_FUNCTION_START("");
+//
+	 ///* using memcpy(dst, src, size in bytes) */
+	//memcpy(pintconf, &(intconf), sizeof(VL53L1_GPIO_interrupt_config_t));
+//
+	///* encoded interrupt config */
+	//pdev->gen_cfg.system__interrupt_config_gpio =
+		//VL53L1_encode_GPIO_interrupt_config(pintconf);
+//
+	///* set thresholds */
+	//status = VL53L1_set_GPIO_thresholds_from_struct(
+			//Dev,
+			//pintconf);
+//
+	//LOG_FUNCTION_END(status);
+	//return status;
+//}
 
 /*
  * Retrieve GPIO interrupt config structure
  */
 
-VL53L1_Error VL53L1_get_GPIO_interrupt_config(
-	VL53L1_DEV                      Dev,
-	VL53L1_GPIO_interrupt_config_t	*pintconf)
-{
-	VL53L1_Error  status = VL53L1_ERROR_NONE;
-
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
-
-	LOG_FUNCTION_START("");
-
-	/*
-	 * Decode the system__interrupt_config_gpio register
-	 * This makes sure the structure is in line with the register
-	 */
-	pdev->gpio_interrupt_config = VL53L1_decode_GPIO_interrupt_config(
-			pdev->gen_cfg.system__interrupt_config_gpio);
-
-	/*
-	 * Readout the system thresholds
-	 */
-	pdev->gpio_interrupt_config.threshold_distance_high =
-		pdev->dyn_cfg.system__thresh_high;
-	pdev->gpio_interrupt_config.threshold_distance_low =
-		pdev->dyn_cfg.system__thresh_low;
-
-	pdev->gpio_interrupt_config.threshold_rate_high =
-		pdev->gen_cfg.system__thresh_rate_high;
-	pdev->gpio_interrupt_config.threshold_rate_low =
-		pdev->gen_cfg.system__thresh_rate_low;
-
-	if (pintconf == &(pdev->gpio_interrupt_config))	{
-		/* Cowardly refusing to copy the same memory locations */
-	} else {
-
-		/* using memcpy(dst, src, size in bytes) */
-		memcpy(pintconf, &(pdev->gpio_interrupt_config),
-				sizeof(VL53L1_GPIO_interrupt_config_t));
-	}
-
-	LOG_FUNCTION_END(status);
-	return status;
-}
+//VL53L1_Error VL53L1_get_GPIO_interrupt_config(
+	//VL53L1_DEV                      Dev,
+	//VL53L1_GPIO_interrupt_config_t	*pintconf)
+//{
+	//VL53L1_Error  status = VL53L1_ERROR_NONE;
+//
+	//VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
+//
+	//LOG_FUNCTION_START("");
+//
+	///*
+	 //* Decode the system__interrupt_config_gpio register
+	 //* This makes sure the structure is in line with the register
+	 //*/
+	//pdev->gpio_interrupt_config = VL53L1_decode_GPIO_interrupt_config(
+			//pdev->gen_cfg.system__interrupt_config_gpio);
+//
+	///*
+	 //* Readout the system thresholds
+	 //*/
+	//pdev->gpio_interrupt_config.threshold_distance_high =
+		//pdev->dyn_cfg.system__thresh_high;
+	//pdev->gpio_interrupt_config.threshold_distance_low =
+		//pdev->dyn_cfg.system__thresh_low;
+//
+	//pdev->gpio_interrupt_config.threshold_rate_high =
+		//pdev->gen_cfg.system__thresh_rate_high;
+	//pdev->gpio_interrupt_config.threshold_rate_low =
+		//pdev->gen_cfg.system__thresh_rate_low;
+//
+	//if (pintconf == &(pdev->gpio_interrupt_config))	{
+		///* Cowardly refusing to copy the same memory locations */
+	//} else {
+//
+		///* using memcpy(dst, src, size in bytes) */
+		//memcpy(pintconf, &(pdev->gpio_interrupt_config),
+				//sizeof(VL53L1_GPIO_interrupt_config_t));
+	//}
+//
+	//LOG_FUNCTION_END(status);
+	//return status;
+//}
 
 VL53L1_Error VL53L1_set_offset_calibration_mode(
 	VL53L1_DEV                     Dev,

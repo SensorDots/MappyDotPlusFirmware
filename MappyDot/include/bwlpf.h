@@ -22,6 +22,9 @@
 #ifndef BWLPF_H_
 #define BWLPF_H_
 
+
+#define FILTER_ORDER                  2  //Filter order
+
 typedef struct
 {
     int n;
@@ -30,16 +33,19 @@ typedef struct
     double a;
     double a2;
     double r;
-    double *A;
-    double *d1;
-    double *d2;
-    double *w0;
-    double *w1;
-    double *w2;
+    double A[FILTER_ORDER/2];
+    double d1[FILTER_ORDER/2];
+    double d2[FILTER_ORDER/2];
+    double w0[FILTER_ORDER/2];
+    double w1[FILTER_ORDER/2];
+    double w2[FILTER_ORDER/2];
+	int enabled;
 } filter_state;
 
-void bwlpf_init(filter_state * filter, uint8_t filter_order, uint8_t sampling_frequency, uint8_t half_power_freq);
+void bwlpf_init(filter_state * filter, uint16_t sampling_frequency, uint8_t half_power_freq);
 uint16_t bwlpf(uint16_t next_sample, filter_state * filter );
+void bwlpf_set_freq(filter_state * filter, uint16_t sampling_frequency);
+
 
 
 #endif /* BWLPF_H_ */

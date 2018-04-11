@@ -57,12 +57,12 @@ typedef struct {
 
 	uint8_t   i2c_slave_address;
 		/*!< i2c device address user specific field */
-	uint8_t   comms_type;
+	//uint8_t   comms_type;
 		/*!< Type of comms : VL53L1_I2C or VL53L1_SPI */
-	uint16_t  comms_speed_khz;
+	//uint16_t  comms_speed_khz;
 		/*!< Comms speed [kHz] : typically 400kHz for I2C  */
 
-	uint32_t  new_data_ready_poll_duration_ms;
+	//uint32_t  new_data_ready_poll_duration_ms;
 		/*!< New data ready poll duration in ms - for debug */
 } VL53L1_Dev_t;
 

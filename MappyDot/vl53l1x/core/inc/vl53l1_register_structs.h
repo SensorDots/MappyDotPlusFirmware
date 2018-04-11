@@ -2175,7 +2175,7 @@ typedef struct {
  */
 
 typedef struct {
-	uint8_t   identification__model_id;
+	//uint8_t   identification__model_id;
 /*!<
 	info: \n
 		- msb =  7
@@ -2185,7 +2185,7 @@ typedef struct {
 	fields: \n
 		- [7:0] = model_id
 */
-	uint8_t   identification__module_type;
+	//uint8_t   identification__module_type;
 /*!<
 	info: \n
 		- msb =  7
@@ -2195,7 +2195,7 @@ typedef struct {
 	fields: \n
 		- [7:0] = module_type
 */
-	uint8_t   identification__revision_id;
+	//uint8_t   identification__revision_id;
 /*!<
 	info: \n
 		- msb =  7
@@ -2206,7 +2206,7 @@ typedef struct {
 		- [3:0] = nvm_revision_id
 		- [7:4] = mask_revision_id
 */
-	uint16_t  identification__module_id;
+	//uint16_t  identification__module_id;
 /*!<
 	info: \n
 		- msb = 15

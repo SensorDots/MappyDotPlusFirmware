@@ -84,13 +84,13 @@ extern "C" {
 
 
 /** VL53L1 IMPLEMENTATION major version */
-#define VL53L1_IMPLEMENTATION_VER_MAJOR       2
+//#define VL53L1_IMPLEMENTATION_VER_MAJOR       2
 /** VL53L1 IMPLEMENTATION minor version */
-#define VL53L1_IMPLEMENTATION_VER_MINOR       2
+//#define VL53L1_IMPLEMENTATION_VER_MINOR       2
 /** VL53L1 IMPLEMENTATION sub version */
-#define VL53L1_IMPLEMENTATION_VER_SUB         1
+//#define VL53L1_IMPLEMENTATION_VER_SUB         1
 /** VL53L1 IMPLEMENTATION sub version */
-#define VL53L1_IMPLEMENTATION_VER_REVISION  1798
+//#define VL53L1_IMPLEMENTATION_VER_REVISION  1798
 
 /****************************************
  * PRIVATE define do not edit
@@ -98,12 +98,12 @@ extern "C" {
 
 /** @brief Defines the parameters of the Get Version Functions
  */
-typedef struct {
-	uint32_t     revision; /*!< revision number */
-	uint8_t      major;    /*!< major number */
-	uint8_t      minor;    /*!< minor number */
-	uint8_t      build;    /*!< build number */
-} VL53L1_Version_t;
+//typedef struct {
+//	uint32_t     revision; /*!< revision number */
+//	uint8_t      major;    /*!< major number */
+//	uint8_t      minor;    /*!< minor number */
+//	uint8_t      build;    /*!< build number */
+//} VL53L1_Version_t;
 
 
 #define VL53L1_DEVINFO_STRLEN 32
@@ -135,9 +135,9 @@ typedef struct {
  */
 typedef uint8_t VL53L1_PresetModes;
 
-#define VL53L1_PRESETMODE_AUTONOMOUS                ((VL53L1_PresetModes)  3)
+//#define VL53L1_PRESETMODE_AUTONOMOUS                ((VL53L1_PresetModes)  3)
 #define VL53L1_PRESETMODE_LITE_RANGING              ((VL53L1_PresetModes)  4)
-#define VL53L1_PRESETMODE_LOWPOWER_AUTONOMOUS       ((VL53L1_PresetModes)  8)
+//#define VL53L1_PRESETMODE_LOWPOWER_AUTONOMOUS       ((VL53L1_PresetModes)  8)
 
 	/* ... Modes to be added depending on device */
 /** @} VL53L1_define_PresetModes_group */
@@ -289,7 +289,7 @@ typedef struct {
 	/*!< Defines the internal operating mode to be used for the next
 	 * measure
 	 */
-	VL53L1_DistanceModes NewDistanceMode;
+	//VL53L1_DistanceModes NewDistanceMode;
 	/*!< Defines the new operating mode to be programmed for the next
 	 * measure
 	 */
@@ -343,7 +343,7 @@ typedef uint8_t VL53L1_State;
  * @brief Single Range measurement data.
  */
 typedef struct {
-	uint32_t TimeStamp;
+	//uint32_t TimeStamp;
 		/*!< 32-bit time stamp.
 		 * @warning Not yet implemented
 		 */
@@ -351,7 +351,7 @@ typedef struct {
 	uint8_t StreamCount;
 		/*!< 8-bit Stream Count. */
 
-	uint8_t RangeQualityLevel;
+	//uint8_t RangeQualityLevel;
 		/*!< indicate a quality level in percentage from 0 to 100
 		 * @warning Not yet implemented
 		 */
@@ -381,7 +381,7 @@ typedef struct {
 		 *  RangeMinMilliMeter and RangeMaxMilliMeter
 		 */
 
-	uint8_t RangeFractionalPart;
+	//uint8_t RangeFractionalPart;
 		/*!< Fractional part of range distance. Final value is a
 		 *  RangeMilliMeter + RangeFractionalPart/256.
 		 *  @warning Not yet implemented
@@ -446,7 +446,7 @@ typedef struct {
 
 typedef struct {
 
-	uint32_t                             struct_version;
+	//uint32_t                             struct_version;
 	VL53L1_CustomerNvmManaged_t          customer;
 	VL53L1_additional_offset_cal_data_t  add_off_cal_data;
 	VL53L1_optical_centre_t              optical_centre;
@@ -547,7 +547,7 @@ typedef struct {
 	VL53L1_LLDriverResults_t llresults;
 	/*!< Low Level Driver data structure */
 
-	VL53L1_State      PalState; /* Store the pal state */
+	//VL53L1_State      PalState; /* Store the pal state */
 	VL53L1_DeviceParameters_t CurrentParameters;
 	/*!< Current Device Parameter */
 

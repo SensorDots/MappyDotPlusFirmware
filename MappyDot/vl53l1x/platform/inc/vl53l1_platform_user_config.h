@@ -78,7 +78,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	/*!< Allocates storage for return and reference restults */
 
 
-#define VL53L1_MAX_STRING_LENGTH 512
+//#define VL53L1_MAX_STRING_LENGTH 512
 
 #endif  /* _VL53L1_PLATFORM_USER_CONFIG_H_ */
 

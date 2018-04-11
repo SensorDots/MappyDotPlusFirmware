@@ -52,18 +52,23 @@
 #ifdef VL53L1_LOGGING
   #include "vl53l1_debug.h"
 #endif
-
+/*
 #define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_CORE, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_CORE, status, ##__VA_ARGS__)
 #define LOG_FUNCTION_END_FMT(status, fmt, ...) \
 	_LOG_FUNCTION_END_FMT(VL53L1_TRACE_MODULE_CORE, status, \
-		fmt, ##__VA_ARGS__)
+		fmt, ##__VA_ARGS__)*/
 
-#define trace_print(level, ...) \
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
+#define trace_print(level, ...)
+
+/*#define trace_print(level, ...) \
 	_LOG_TRACE_PRINT(VL53L1_TRACE_MODULE_CORE, \
-	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)
+	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)*/
 
 
 #ifndef VL53L1_NOCALIB

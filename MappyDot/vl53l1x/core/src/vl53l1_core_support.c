@@ -34,7 +34,6 @@
 
 #include "vl53l1_ll_def.h"
 #include "vl53l1_ll_device.h"
-#include "vl53l1_platform_log.h"
 #include "vl53l1_core_support.h"
 #include "vl53l1_platform_user_data.h"
 #include "vl53l1_platform_user_defines.h"
@@ -44,7 +43,7 @@
 #include "vl53l1_register_debug.h"
 #endif
 
-#define LOG_FUNCTION_START(fmt, ...) \
+/*#define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_CORE, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_CORE, status, ##__VA_ARGS__)
@@ -54,7 +53,12 @@
 
 #define trace_print(level, ...) \
 	_LOG_TRACE_PRINT(VL53L1_TRACE_MODULE_CORE, \
-	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)
+	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)*/
+
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
+#define trace_print(level, ...)
 
 
 uint32_t VL53L1_calc_pll_period_us(
@@ -77,7 +81,7 @@ uint32_t VL53L1_calc_pll_period_us(
 
 	LOG_FUNCTION_START("");
 
-	pll_period_us = (0x01 << 30) / fast_osc_frequency;
+	pll_period_us = ((uint32_t)0x01 << 30) / fast_osc_frequency;
 
 #ifdef VL53L1_LOGGING
 	trace_print(VL53L1_TRACE_LEVEL_DEBUG,

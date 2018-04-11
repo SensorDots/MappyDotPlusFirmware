@@ -48,7 +48,7 @@
 #include "vl53l1_register_debug.h"
 #endif
 
-#define LOG_FUNCTION_START(fmt, ...) \
+/*#define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_CORE, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_CORE, status, ##__VA_ARGS__)
@@ -58,23 +58,28 @@
 
 #define trace_print(level, ...) \
 	_LOG_TRACE_PRINT(VL53L1_TRACE_MODULE_CORE, \
-	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)
+	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)*/
+
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
+#define trace_print(level, ...)
 
 
-void  VL53L1_init_version(
-	VL53L1_DEV        Dev)
-{
+//void  VL53L1_init_version(
+//	VL53L1_DEV        Dev)
+//{
 	/**
 	 * Initialise version structure
 	 */
 
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
+	//VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
 
-	pdev->version.ll_major    = VL53L1_LL_API_IMPLEMENTATION_VER_MAJOR;
+	/*pdev->version.ll_major    = VL53L1_LL_API_IMPLEMENTATION_VER_MAJOR;
 	pdev->version.ll_minor    = VL53L1_LL_API_IMPLEMENTATION_VER_MINOR;
 	pdev->version.ll_build    = VL53L1_LL_API_IMPLEMENTATION_VER_SUB;
-	pdev->version.ll_revision = VL53L1_LL_API_IMPLEMENTATION_VER_REVISION;
-}
+	pdev->version.ll_revision = VL53L1_LL_API_IMPLEMENTATION_VER_REVISION;*/
+//}
 
 
 void  VL53L1_init_ll_driver_state(

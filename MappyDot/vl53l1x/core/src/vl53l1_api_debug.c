@@ -37,7 +37,7 @@
 #include "vl53l1_core.h"
 #include "vl53l1_api_debug.h"
 
-#define LOG_FUNCTION_START(fmt, ...) \
+/*#define LOG_FUNCTION_START(fmt, ...) \
 	_LOG_FUNCTION_START(VL53L1_TRACE_MODULE_CORE, fmt, ##__VA_ARGS__)
 #define LOG_FUNCTION_END(status, ...) \
 	_LOG_FUNCTION_END(VL53L1_TRACE_MODULE_CORE, status, ##__VA_ARGS__)
@@ -47,7 +47,12 @@
 
 #define trace_print(level, ...) \
 	_LOG_TRACE_PRINT(trace_flags, \
-	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)
+	level, VL53L1_TRACE_FUNCTION_NONE, ##__VA_ARGS__)*/
+
+#define LOG_FUNCTION_START(fmt, ... )
+#define LOG_FUNCTION_END(status, ... )
+#define LOG_FUNCTION_END_FMT(status, fmt, ... )
+#define trace_print(level, ...)
 
 
 /* Start Patch_AdditionalDebugData_11823 */

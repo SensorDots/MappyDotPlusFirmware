@@ -149,7 +149,6 @@ void TIMER_1_stop()
  */
 int8_t TIMER_2_init()
 {
-
 	/* Enable TC4 */
 	PRR1 &= ~(1 << PRTIM4);
 
@@ -172,7 +171,6 @@ int8_t TIMER_2_init()
 	         | 0 << OCIE4A /* Output Compare A Match Interrupt Enable: disabled */
 	         | 0 << ICIE4  /* Input Capture Interrupt Enable: disabled */
 	         | 1 << TOIE4; /* Overflow Interrupt Enable: enabled */
-
 	return 0;
 }
 

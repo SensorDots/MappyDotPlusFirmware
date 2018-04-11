@@ -63,7 +63,6 @@
 #ifndef _VL53L1_API_H_
 #define _VL53L1_API_H_
 
-#include "vl53l1_api_strings.h"
 #include "vl53l1_api_core.h"
 
 #ifdef __cplusplus
@@ -90,7 +89,7 @@ extern "C"
  * @return  VL53L1_ERROR_NONE     Success
  * @return  "Other error code"    See ::VL53L1_Error
  */
-VL53L1_Error VL53L1_GetVersion(VL53L1_Version_t *pVersion);
+//VL53L1_Error VL53L1_GetVersion(VL53L1_Version_t *pVersion);
 
 /**
  * @brief Reads the Product Revision for a for given Device
@@ -290,8 +289,8 @@ VL53L1_Error VL53L1_WaitDeviceBooted(VL53L1_DEV Dev);
  * @return  VL53L1_ERROR_MODE_NOT_SUPPORTED This error occurs when PresetMode is
  *                                          not in the supported list
  */
-VL53L1_Error VL53L1_SetPresetMode(VL53L1_DEV Dev,
-		VL53L1_PresetModes PresetMode);
+VL53L1_Error VL53L1_SetPresetMode(VL53L1_DEV Dev, VL53L1_PresetModes PresetMode, VL53L1_DistanceModes DistanceMode,
+                                  uint32_t TimingBudgetMS, uint32_t InterMeasurementMS);
 
 /**
  * @brief  Get current Preset Mode

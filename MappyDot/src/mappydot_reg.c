@@ -23,9 +23,21 @@ uint8_t check_command_size(uint8_t command)
 
     if (command == SET_LED_MODE)                            return 1;
 
+	if (command == SET_GPIO_MODE)                           return 1;
+
+	if (command == INTERSENSOR_CROSSTALK_TIMEOUT)           return 1;
+
+	if (command == INTERSENSOR_CROSSTALK_MEASUREMENT_DELAY) return 1;
+
+    if (command == REBOOT_TO_BOOTLOADER)                    return 1;
+
+	if (command == SIGNAL_LIMIT_CHECK_VALUE)                return 1;
+
+	if (command == SIGMA_LIMIT_CHECK_VALUE)                 return 2;
+
     if (command == SET_LED_THRESHOLD_DISTANCE_IN_MM)        return 2;
 
-    if (command == SET_GPIO_MODE)                           return 1;
+	if (command == MEASUREMENT_BUDGET)						return 2;
 
     if (command == SET_GPIO_THRESHOLD_DISTANCE_IN_MM)       return 2;
 
@@ -33,17 +45,13 @@ uint8_t check_command_size(uint8_t command)
 
     if (command == CALIBRATE_CROSSTALK)                     return 2;
 
-    if (command == INTERSENSOR_CROSSTALK_TIMEOUT)           return 1;
+	if (command == RANGING_MEASUREMENT_MODE)                return 2;
 
-    if (command == INTERSENSOR_CROSSTALK_MEASUREMENT_DELAY) return 1;
-
-    if (command == NAME_DEVICE)                             return 16;
+	if (command == REGION_OF_INTEREST)                      return 4;
 
     if (command == ENTER_FACTORY_MODE)                      return 6;
 
-    if (command == REBOOT_TO_BOOTLOADER)                    return 1;
-
-	if (command == CUSTOM_PROFILE)                          return 9;
+    if (command == NAME_DEVICE)                             return 16;
 
     return 0;
 }
@@ -59,16 +67,16 @@ uint8_t is_read_command(uint8_t command)
 {
 	if (command == READ_DISTANCE || command == READ_ACCURACY || 
 	    command == READ_ERROR_CODE || command == DEVICE_NAME || 
-		command == READ_CURRENT_SETTINGS || 
+		command == READ_CURRENT_SETTINGS || command == CHECK_INTERRUPT ||
 		command == READ_NONFILTERED_VALUE || command == FIRMWARE_VERSION) return 1;
 
     return 0;
 }
 
-uint16_t bytes_to_mm(uint8_t *bytes)
+/*uint16_t bytes_to_mm(uint8_t *bytes)
 {
     return (uint16_t)((uint16_t)bytes[0] << 8 | bytes[1]);
-}
+}*/
 
 void mm_to_bytes(uint8_t *bytes, uint16_t mm)
 {

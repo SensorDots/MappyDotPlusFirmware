@@ -22,15 +22,14 @@
 #ifndef HELPER_H_
 #define HELPER_H_
 
-#include "vl53l0x_types.h"
-#include "vl53l0x_profiles.h"
+#include "vl53l1_types.h"
 
 void flash_led(uint32_t timeout_ms, int8_t num_of_flashes, bool pwm);
 void delay_ms(uint16_t ms);
 #ifndef DEV_DISABLE
 uint16_t avg(uint16_t * array, uint8_t count);
 #endif
-void translate_measurement_mode(uint8_t measurement_mode, VL53L0X_Measurement_Mode *mode_settings, uint8_t * custom_profile_settings);
+//void translate_measurement_mode(uint8_t measurement_mode, VL53L1_Measurement_Mode *mode_settings, uint8_t * custom_profile_settings);
 uint8_t translate_ranging_mode(uint8_t ranging_mode);
 void store_current_address_eeprom(uint8_t eeprom_address, uint8_t slave_address);
 

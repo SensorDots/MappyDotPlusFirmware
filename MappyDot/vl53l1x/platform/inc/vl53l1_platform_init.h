@@ -61,9 +61,7 @@ extern "C"
 
 VL53L1_Error VL53L1_platform_init(
 	VL53L1_Dev_t *pdev,
-	uint8_t       i2c_slave_address,
-	uint8_t       comms_type,
-	uint16_t      comms_speed_khz);
+	uint8_t       i2c_slave_address);
 
 
 /**
