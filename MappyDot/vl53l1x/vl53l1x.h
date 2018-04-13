@@ -31,6 +31,7 @@ VL53L1_CalibrationData_t * calibration, uint8_t got_calibration_data);
 void setRegionOfInterest(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_UserRoi_t * ROI);
 void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signal, uint8_t sigma);
 void setCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t enabled);
+uint16_t readSigma(VL53L1_Dev_t * device, VL53L1_Error * status);
 
 
 VL53L1_Error startSingleRangingMeasurement(VL53L1_Dev_t * device, VL53L1_Error * status);

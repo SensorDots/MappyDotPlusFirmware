@@ -86,11 +86,11 @@ extern "C" {
 /** VL53L1 IMPLEMENTATION major version */
 //#define VL53L1_IMPLEMENTATION_VER_MAJOR       2
 /** VL53L1 IMPLEMENTATION minor version */
-//#define VL53L1_IMPLEMENTATION_VER_MINOR       2
+//#define VL53L1_IMPLEMENTATION_VER_MINOR       3
 /** VL53L1 IMPLEMENTATION sub version */
-//#define VL53L1_IMPLEMENTATION_VER_SUB         1
+//#define VL53L1_IMPLEMENTATION_VER_SUB         0
 /** VL53L1 IMPLEMENTATION sub version */
-//#define VL53L1_IMPLEMENTATION_VER_REVISION  1798
+//#define VL53L1_IMPLEMENTATION_VER_REVISION  1823
 
 /****************************************
  * PRIVATE define do not edit
@@ -351,7 +351,7 @@ typedef struct {
 	uint8_t StreamCount;
 		/*!< 8-bit Stream Count. */
 
-	//uint8_t RangeQualityLevel;
+	uint8_t RangeQualityLevel;
 		/*!< indicate a quality level in percentage from 0 to 100
 		 * @warning Not yet implemented
 		 */

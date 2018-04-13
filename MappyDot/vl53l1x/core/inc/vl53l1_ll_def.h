@@ -54,19 +54,19 @@ extern "C" {
  */
 
 /** VL53L1 Low Level Driver IMPLEMENTATION major version */
-//#define VL53L1_LL_API_IMPLEMENTATION_VER_MAJOR       1
+#define VL53L1_LL_API_IMPLEMENTATION_VER_MAJOR       1
 /** VL53L1 Low Level DriverI IMPLEMENTATION minor version */
-//#define VL53L1_LL_API_IMPLEMENTATION_VER_MINOR       2
+#define VL53L1_LL_API_IMPLEMENTATION_VER_MINOR       2
 /** VL53L1 Low Level DriverI IMPLEMENTATION sub version */
-//#define VL53L1_LL_API_IMPLEMENTATION_VER_SUB         9
+#define VL53L1_LL_API_IMPLEMENTATION_VER_SUB         10
 /** VL53L1 Low Level Driver IMPLEMENTATION sub version */
-//#define VL53L1_LL_API_IMPLEMENTATION_VER_REVISION    75
+#define VL53L1_LL_API_IMPLEMENTATION_VER_REVISION    1082
 
-//#define VL53L1_LL_API_IMPLEMENTATION_VER_STRING "1.2.9.75"
+#define VL53L1_LL_API_IMPLEMENTATION_VER_STRING "1.2.10.1082"
 
 /** VL53L1_FIRMWARE min and max compatible revisions */
-//#define VL53L1_FIRMWARE_VER_MINIMUM         398
-//#define VL53L1_FIRMWARE_VER_MAXIMUM         400
+#define VL53L1_FIRMWARE_VER_MINIMUM         398
+#define VL53L1_FIRMWARE_VER_MAXIMUM         400
 
 
 /****************************************
@@ -492,7 +492,7 @@ typedef struct {
 
 	uint8_t  range_id;
 		/*!< Range Result id e.g 0, 1, 2 */
-	//uint32_t time_stamp;
+	uint32_t time_stamp;
 		/*!< 32-bit time stamp */
 
 	uint16_t   width;
@@ -779,7 +779,7 @@ typedef struct {
 
 typedef struct {
 
-	//uint8_t   wait_method;
+	uint8_t   wait_method;
 		/*!< Wait type : blocking or non blocking */
 	VL53L1_DevicePresetModes        preset_mode;
 		/*!< Current preset mode */
@@ -1039,7 +1039,7 @@ typedef struct {
 	((void) (x))
 
 
-/*#define IGNORE_STATUS(__FUNCTION_ID__, __ERROR_STATUS_CHECK__, __STATUS__) \
+#define IGNORE_STATUS(__FUNCTION_ID__, __ERROR_STATUS_CHECK__, __STATUS__) \
 	do { \
 		DISABLE_WARNINGS(); \
 		if (__FUNCTION_ID__) { \
@@ -1050,13 +1050,10 @@ typedef struct {
 		} \
 		ENABLE_WARNINGS(); \
 	} \
-	while (0)*/
+	while (0)
 
-/*#define VL53L1_COPYSTRING(str, ...) \
-	(strncpy(str, ##__VA_ARGS__, VL53L1_MAX_STRING_LENGTH-1))*/
-
-#define VL53L1_COPYSTRING(str, ...)
-#define IGNORE_STATUS(__FUNCTION_ID__, __ERROR_STATUS_CHECK__, __STATUS__)
+#define VL53L1_COPYSTRING(str, ...) \
+	(strncpy(str, ##__VA_ARGS__, VL53L1_MAX_STRING_LENGTH-1))
 
 #ifdef __cplusplus
 }

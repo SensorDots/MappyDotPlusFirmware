@@ -69,7 +69,7 @@
 #define EEPROM_USER_CALIB_START       0xF0
 
 #define FILTER_FREQUENCY              6  //Hz
-#define SETTINGS_SIZE                 17
+#define SETTINGS_SIZE                 21
 #define CALIB_SIZE                    95
 #define MIN_DIST                      30 //minimum distance from VL53L1X
 #define MAX_DIST                      5000 //Max sanity distance from VL53L1X
@@ -124,7 +124,7 @@ uint8_t read_interrupt                = 0;
 uint16_t signal_limit_check           = 1000;
 uint8_t sigma_limit_check             = 15;
 
-VL53L1_CalibrationData_t * calibration_data;
+VL53L1_CalibrationData_t calibration_data;
 bool got_calibration_data = false;
 
 int8_t led_pulse = 0;
@@ -142,7 +142,7 @@ static volatile bool interrupt_timeout_interrupt_fired = false;
 static volatile bool crosstalk_interrupt_fired = false;
 static volatile bool calibrating = false;
 uint8_t mappydot_name[16];
-uint8_t settings_buffer[SETTINGS_SIZE + 1]; //Last byte is CRC
+uint8_t settings_buffer[SETTINGS_SIZE + 2 + 1]; //Last byte is CRC (+2 is not stored settings for code reuse)
 
 int main(void)
 {	   
@@ -261,10 +261,10 @@ int main(void)
 	//TODO "De-boilerplate" this:
 
     /* Read User settings */
-    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1); //+1 is CRC
+    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START, settings_buffer, SETTINGS_SIZE + 1); //+1 is CRC
 
 	/* Read calibration data */
-	uint8_t * calib_ptr = (uint8_t *)calibration_data;
+	uint8_t * calib_ptr = (uint8_t *)&calibration_data;
 
 	FLASH_0_read_eeprom_block(EEPROM_USER_CALIB_START, calib_ptr, CALIB_SIZE);
 	uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
@@ -299,10 +299,8 @@ int main(void)
 	/* Assign struct to pointer */
 	pDevice = &device;
 
-	//translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
-
 	if (!init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
-					  calibration_data, got_calibration_data))
+					  &calibration_data, got_calibration_data))
 	{
 		/* Ops we had an init failure */
 		flash_led(5,-1, 1);
@@ -422,11 +420,11 @@ int main(void)
 				if (measure.RangeStatus == 4)
 				{
 				    current_millimeters = 0;
-					distance_error = 0;
 				} else {
 					current_millimeters = measure.RangeMilliMeter;
-					distance_error = (uint32_t)measure.SigmaMilliMeter >> 16;
 				}			
+
+				distance_error = (uint32_t)measure.SigmaMilliMeter / 65536; 
 
 				/* 0 is invalid measurement */
 
@@ -446,6 +444,12 @@ int main(void)
 
 					if (filtering_enabled)
 						filtered_distance = bwlpf(filtered_distance, &low_pass_filter_state);
+
+						/* Ignore filtered distance if over max, this can happen when there is a rapid change 
+						   from no measurement to large value. This is because the filter does take time to settle
+						   but during this time the error code will generally be 7 */
+						if (filtered_distance > MAX_DIST)
+							filtered_distance = real_distance;
 
 					/* Averaging happens after filtering */
 					if (averaging_enabled)
@@ -585,7 +589,7 @@ static void read_default_settings()
     FLASH_0_read_eeprom_block(EEPROM_FACTORY_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1); //+1 is CRC
 	uint8_t crc = Crc8(settings_buffer, SETTINGS_SIZE);
 
-	uint8_t * calib_ptr = (uint8_t *)calibration_data;
+	uint8_t * calib_ptr = (uint8_t *)&calibration_data;
 
 	FLASH_0_read_eeprom_block(EEPROM_FACTORY_CALIB_START, calib_ptr, CALIB_SIZE);
 	uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
@@ -618,8 +622,10 @@ static void read_default_settings()
  * 
  * \return void
  */
-static void reset_vl53l0x_ranging()
+static void reset_vl53l1x_ranging()
 {
+	stopContinuous(pDevice, &status);
+
 	/* Set XSHUT to low to turn off (Shutdown is active low). */
 	XSHUT_set_level(false);
 
@@ -634,7 +640,8 @@ static void reset_vl53l0x_ranging()
 	waitDeviceReady(pDevice,&status);
 
     init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
-			        calibration_data, got_calibration_data);
+			        &calibration_data, got_calibration_data);
+
 }
 
 /**
@@ -694,21 +701,21 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			waitDeviceReady(pDevice,&status);
 
 			init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
-			calibration_data, got_calibration_data);
+			&calibration_data, got_calibration_data);
             //vl53l0xStartup(device, status);
             vl53l1x_powerstate = 1;
         }
 
         else if (command == RESET_VL53L1X_RANGING) //Hard reset
         {
-			reset_vl53l0x_ranging();
+			reset_vl53l1x_ranging();
         }
 
         else if (command == WRITE_CURRENT_SETTINGS_AS_START_UP_DEFAULT)
         {
             get_settings_buffer(settings_buffer, true);
 
-			uint8_t * calib_ptr = (uint8_t *)calibration_data;
+			uint8_t * calib_ptr = (uint8_t *)&calibration_data;
 			uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
 
 			/* Settings buffer is always 1 longer than actual settings */
@@ -731,7 +738,10 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
             }
         }
 
-        else if (command == RESTORE_FACTORY_DEFAULTS) read_default_settings();
+        else if (command == RESTORE_FACTORY_DEFAULTS) {
+			read_default_settings();
+			reset_vl53l1x_ranging();
+		}
 
         else if (command == INTERSENSOR_CROSSTALK_REDUCTION_ENABLE)
         {
@@ -764,7 +774,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if(calibrateSPAD(pDevice, &status,calibration_data) == 1) //returns 0 if success
+		    if(calibrateSPAD(pDevice, &status, &calibration_data) == 1) //returns 0 if success
 			    flash_led(500,4,0); //error
 			else
 				{
@@ -893,7 +903,6 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 		    stopContinuous(pDevice,&status);
 
 			//Change to selected measurement mode
-			//translate_measurement_mode(current_measurement_mode, &measurement_profile, custom_profile_settings);
             setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget);
 
 			//Reset back to original ranging mode
@@ -935,11 +944,11 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-			if(calibrateSPAD(pDevice, &status, calibration_data) == 0) //returns 0 if success
+			if(calibrateSPAD(pDevice, &status, &calibration_data) == 0) //returns 0 if success
 			{
 				//if(calibrateTemperature(pDevice, &status,&vhvSettings,&phaseCal) == 0) //returns 0 if success
 				//{
-					if (calibrateDistanceOffset(pDevice, &status,calibration_data,bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
+					if (calibrateDistanceOffset(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
 					{
 						flash_led(200,1,0);
 						got_calibration_data = true;
@@ -966,7 +975,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if (calibrateCrosstalk(pDevice, &status, calibration_data, bytes_to_mm(arg[0],arg[1])))  //returns 0 if success
+		    if (calibrateCrosstalk(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])))  //returns 0 if success
 				flash_led(500,4,0); //error
 			else
 			{
@@ -984,11 +993,15 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 	{
 		if (command == REGION_OF_INTEREST)
 		{
-			ROI.TopLeftX = arg[0] % 16;
-			ROI.TopLeftY = arg[1] % 16;
-			ROI.BotRightX = arg[2] % 16;
-			ROI.BotRightY = arg[3] % 16;
+			stopContinuous(pDevice, &status);
+			ROI.TopLeftX = ((uint8_t)arg[0]) % 16;
+			ROI.TopLeftY = ((uint8_t)arg[1]) % 16;
+			ROI.BotRightX = ((uint8_t)arg[2]) % 16;
+			ROI.BotRightY = ((uint8_t)arg[3]) % 16;
 			setRegionOfInterest(pDevice,&status,&ROI);
+			//reset_vl53l1x_ranging();
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+
 		}
 	}
 
@@ -1051,10 +1064,13 @@ static void get_settings_buffer(uint8_t * buffer, bool store_settings)
     buffer[14] = intersensor_crosstalk_delay;
 	buffer[15] = intersensor_crosstalk_timeout;
     buffer[16] = vl53l1x_powerstate;
-    if (store_settings) { 
-	    /* Calibration */
-	    //calibration_data
-
+	buffer[17] = (uint8_t)ROI.TopLeftX;
+	buffer[18] = (uint8_t)ROI.TopLeftY;
+	buffer[19] = (uint8_t)ROI.BotRightX;
+	buffer[20] = (uint8_t)ROI.BotRightY;
+    if (!store_settings) {
+		buffer[21] = calibration_data.optical_centre.x_centre >> 4;
+		buffer[22] = calibration_data.optical_centre.y_centre >> 4;
 	}
 
 }
@@ -1069,7 +1085,6 @@ static void get_settings_buffer(uint8_t * buffer, bool store_settings)
  */
 static void set_settings(uint8_t * buffer)
 {
-    //uint8_t tmp_buffer[2];
     measurement_budget = bytes_to_mm(buffer[0],buffer[1]);
     current_ranging_mode = buffer[2];
     current_measurement_mode = buffer[3];
@@ -1084,8 +1099,10 @@ static void set_settings(uint8_t * buffer)
     intersensor_crosstalk_delay = buffer[14];
 	intersensor_crosstalk_timeout = buffer[15];
     vl53l1x_powerstate = buffer[16];
-
-	//calibration_data TODO
+	ROI.TopLeftX = buffer[17];
+	ROI.TopLeftY = buffer[18];
+	ROI.BotRightX = buffer[19];
+	ROI.BotRightY =	buffer[20];
 	
 }
 
@@ -1133,7 +1150,7 @@ uint8_t main_process_tx_command(uint8_t command, uint8_t * tx_buffer)
     else if (command == READ_CURRENT_SETTINGS)
     {
         get_settings_buffer(tx_buffer, false);
-        return 17;
+        return 23;
     }
 
     else if (command == READ_NONFILTERED_VALUE)

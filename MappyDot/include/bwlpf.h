@@ -23,7 +23,7 @@
 #define BWLPF_H_
 
 
-#define FILTER_ORDER                  2  //Filter order
+#define FILTER_ORDER                  4  //Filter order
 
 typedef struct
 {

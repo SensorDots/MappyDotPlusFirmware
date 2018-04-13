@@ -139,16 +139,6 @@
 /* Maximum timing budget allowed codex #456189*/
 
 
-/* local static utilities functions */
-static VL53L1_Error set_tuning_parm(
-	VL53L1_DEV            Dev,
-	VL53L1_TuningParms    tuning_parm_key,
-	int32_t               tuning_parm_value);
-static VL53L1_Error get_tuning_parm(
-	VL53L1_DEV                     Dev,
-	VL53L1_TuningParms             tuning_parm_key,
-	int32_t                       *ptuning_parm_value);
-
 /* Bare Driver Tuning parameter table indexed with VL53L1_Tuning_t */
 static int32_t BDTable[VL53L1_TUNING_MAX_TUNABLE_KEY] = {
 		TUNING_VERSION,
@@ -775,7 +765,7 @@ VL53L1_Error VL53L1_SetDeviceAddress(VL53L1_DEV Dev, uint8_t DeviceAddress)
 	LOG_FUNCTION_START("");
 
 	Status = VL53L1_WrByte(Dev, VL53L1_I2C_SLAVE__DEVICE_ADDRESS,
-		DeviceAddress);
+		DeviceAddress / 2);
 
 	LOG_FUNCTION_END(Status);
 	return Status;
@@ -1151,7 +1141,6 @@ VL53L1_Error VL53L1_SetMeasurementTimingBudgetMicroSeconds(VL53L1_DEV Dev,
 	//int32_t vhv_loops;
 	uint32_t FDAMaxTimingBudgetUs = FDA_MAX_TIMING_BUDGET_US;
 
-	//VL53L1_LLDriverData_t   *pLLData;
 
 	LOG_FUNCTION_START("");
 
@@ -1200,8 +1189,9 @@ VL53L1_Error VL53L1_SetMeasurementTimingBudgetMicroSeconds(VL53L1_DEV Dev,
 		case VL53L1_PRESETMODE_LOWPOWER_AUTONOMOUS:
 			FDAMaxTimingBudgetUs *= 2;
 			vhv = LOWPOWER_AUTO_VHV_LOOP_DURATION_US;
-			pLLData =  VL53L1DevStructGetLLDriverHandle(Dev);
-			vhv_loops = pLLData->low_power_auto_data.vhv_loop_bound;
+			VL53L1_get_tuning_parm(Dev,
+			VL53L1_TUNINGPARM_LOWPOWERAUTO_VHV_LOOP_BOUND,
+			&vhv_loops);
 			if (vhv_loops > 0) {
 				vhv += vhv_loops *
 					LOWPOWER_AUTO_VHV_LOOP_DURATION_US;
@@ -1267,7 +1257,6 @@ VL53L1_Error VL53L1_GetMeasurementTimingBudgetMicroSeconds(VL53L1_DEV Dev,
 	//uint32_t TimingGuard;
 	//uint32_t vhv;
 	//int32_t vhv_loops;
-	//VL53L1_LLDriverData_t   *pLLData;
 
 	LOG_FUNCTION_START("");
 
@@ -1309,8 +1298,9 @@ VL53L1_Error VL53L1_GetMeasurementTimingBudgetMicroSeconds(VL53L1_DEV Dev,
 
 		case VL53L1_PRESETMODE_LOWPOWER_AUTONOMOUS:
 			vhv = LOWPOWER_AUTO_VHV_LOOP_DURATION_US;
-			pLLData =  VL53L1DevStructGetLLDriverHandle(Dev);
-			vhv_loops = pLLData->low_power_auto_data.vhv_loop_bound;
+			VL53L1_get_tuning_parm(Dev,
+			VL53L1_TUNINGPARM_LOWPOWERAUTO_VHV_LOOP_BOUND,
+			&vhv_loops);
 			if (vhv_loops > 0) {
 				vhv += vhv_loops *
 					LOWPOWER_AUTO_VHV_LOOP_DURATION_US;
@@ -1819,6 +1809,12 @@ VL53L1_Error VL53L1_StopMeasurement(VL53L1_DEV Dev)
 	LOG_FUNCTION_START("");
 
 	Status = VL53L1_get_user_zone(Dev, &user_zone);
+	//  Initialize variables fix ticket EwokP #475395
+	PresetMode = PALDevDataGet(Dev,
+	CurrentParameters.PresetMode);
+	NewDistanceMode = PALDevDataGet(Dev,
+	CurrentParameters.NewDistanceMode);
+	//  End of Initialize variables fix ticket EwokP #475395
 	if (Status == VL53L1_ERROR_NONE)
 		Status = VL53L1_get_timeouts_us(Dev, &PhaseCalTimeoutUs,
 			&MmTimeoutUs, &TimingBudget);
@@ -1830,10 +1826,6 @@ VL53L1_Error VL53L1_StopMeasurement(VL53L1_DEV Dev)
 		Status = VL53L1_WaitUs(Dev, 500);
 
 	if (Status == VL53L1_ERROR_NONE) {
-		PresetMode = PALDevDataGet(Dev,
-				CurrentParameters.PresetMode);
-		NewDistanceMode = PALDevDataGet(Dev,
-				CurrentParameters.NewDistanceMode);
 		inter_measurement_period_ms =  PALDevDataGet(Dev,
 					LLData.inter_measurement_period_ms);
 
@@ -1934,50 +1926,50 @@ VL53L1_Error VL53L1_WaitMeasurementDataReady(VL53L1_DEV Dev)
 
 
 
-//static uint8_t ComputeRQL(uint8_t active_results,
-		//uint8_t FilteredRangeStatus,
-		//VL53L1_range_data_t *presults_data)
-//{
-	//int16_t SRL = 300;
-	//uint16_t SRAS = 30;
-	//FixPoint1616_t RAS;
-	//FixPoint1616_t SRQL;
-	//FixPoint1616_t GI =   7713587; /* 117.7 * 65536 */
-	//FixPoint1616_t GGm =  3198157; /* 48.8 * 65536 */
-	//FixPoint1616_t LRAP = 6554;    /* 0.1 * 65536 */
-	//FixPoint1616_t partial;
-	//uint8_t finalvalue;
-	//uint8_t returnvalue;
-//
-	//if (active_results == 0)
-		//returnvalue = 0;
-	//else if (FilteredRangeStatus == VL53L1_DEVICEERROR_PHASECONSISTENCY)
-		//returnvalue = 50;
-	//else {
-		//if (presults_data->median_range_mm < SRL)
-			//RAS = SRAS * 65536;
-		//else
-			//RAS = LRAP * presults_data->median_range_mm;
-//
-		///* Fix1616 + (fix1616 * uint16_t / fix1616) * 65536 = fix1616 */
-		//if (RAS != 0) {
-			//partial = (GGm * presults_data->sigma_mm);
-			//partial = partial + (RAS >> 1);
-			//partial = partial / RAS;
-			//partial = partial * 65536;
-			//if (partial <= GI)
-				//SRQL = GI - partial;
-			//else
-				//SRQL = 50 * 65536;
-		//} else
-			//SRQL = 100 * 65536;
-//
-		//finalvalue = (uint8_t)(SRQL >> 16);
-		//returnvalue = MAX(50, MIN(100, finalvalue));
-	//}
-//
-	//return returnvalue;
-//}
+static uint8_t ComputeRQL(uint8_t active_results,
+		uint8_t FilteredRangeStatus,
+		VL53L1_range_data_t *presults_data)
+{
+	int16_t SRL = 300;
+	uint16_t SRAS = 30;
+	FixPoint1616_t RAS;
+	FixPoint1616_t SRQL;
+	FixPoint1616_t GI =   7713587; /* 117.7 * 65536 */
+	FixPoint1616_t GGm =  3198157; /* 48.8 * 65536 */
+	FixPoint1616_t LRAP = 6554;    /* 0.1 * 65536 */
+	FixPoint1616_t partial;
+	uint8_t finalvalue;
+	uint8_t returnvalue;
+
+	if (active_results == 0)
+		returnvalue = 0;
+	else if (FilteredRangeStatus == VL53L1_DEVICEERROR_PHASECONSISTENCY)
+		returnvalue = 50;
+	else {
+		if (presults_data->median_range_mm < SRL)
+			RAS = SRAS * 65536;
+		else
+			RAS = LRAP * presults_data->median_range_mm;
+
+		/* Fix1616 + (fix1616 * uint16_t / fix1616) * 65536 = fix1616 */
+		if (RAS != 0) {
+			partial = (GGm * presults_data->sigma_mm);
+			partial = partial + (RAS >> 1);
+			partial = partial / RAS;
+			partial = partial * 65536;
+			if (partial <= GI)
+				SRQL = GI - partial;
+			else
+				SRQL = 50 * 65536;
+		} else
+			SRQL = 100 * 65536;
+
+		finalvalue = (uint8_t)(SRQL >> 16);
+		returnvalue = MAX(50, MIN(100, finalvalue));
+	}
+
+	return returnvalue;
+}
 
 
 static uint8_t ConvertStatusLite(uint8_t FilteredRangeStatus)
@@ -2205,7 +2197,7 @@ VL53L1_Error VL53L1_SetTuningParameter(VL53L1_DEV Dev,
 	LOG_FUNCTION_START("");
 
 	if (TuningParameterId >= 32768)
-		Status = set_tuning_parm(Dev,
+		Status = VL53L1_set_tuning_parm(Dev,
 			TuningParameterId,
 			TuningParameterValue);
 	else {
@@ -2227,7 +2219,7 @@ VL53L1_Error VL53L1_GetTuningParameter(VL53L1_DEV Dev,
 	LOG_FUNCTION_START("");
 
 	if (TuningParameterId >= 32768)
-		Status = get_tuning_parm(Dev,
+		Status = VL53L1_get_tuning_parm(Dev,
 			TuningParameterId,
 			pTuningParameterValue);
 	else {
@@ -2881,117 +2873,4 @@ VL53L1_Error VL53L1_GetThresholdConfig(VL53L1_DEV Dev,
 
 
 /* End Group PAL IRQ Triggered events Functions */
-
-static VL53L1_Error get_tuning_parm(
-	VL53L1_DEV                     Dev,
-	VL53L1_TuningParms             tuning_parm_key,
-	int32_t                       *ptuning_parm_value)
-{
-
-	/*
-	 * Gets the requested tuning parm value
-	 * - Large case statement for returns
-	 * - if key does not match, INVALID parm error returned
-	 */
-
-	VL53L1_Error  status = VL53L1_ERROR_NONE;
-
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
-
-	LOG_FUNCTION_START("");
-
-	switch (tuning_parm_key) {
-
-	case VL53L1_TUNINGPARM_LITE_LONG_SIGMA_THRESH_MM:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_long_sigma_thresh_mm;
-	break;
-	case VL53L1_TUNINGPARM_LITE_MED_SIGMA_THRESH_MM:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_med_sigma_thresh_mm;
-	break;
-	case VL53L1_TUNINGPARM_LITE_SHORT_SIGMA_THRESH_MM:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_short_sigma_thresh_mm;
-	break;
-	case VL53L1_TUNINGPARM_LITE_LONG_MIN_COUNT_RATE_RTN_MCPS:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_long_min_count_rate_rtn_mcps;
-	break;
-	case VL53L1_TUNINGPARM_LITE_MED_MIN_COUNT_RATE_RTN_MCPS:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_med_min_count_rate_rtn_mcps;
-	break;
-	case VL53L1_TUNINGPARM_LITE_SHORT_MIN_COUNT_RATE_RTN_MCPS:
-		*ptuning_parm_value =
-				(int32_t)pdev->tuning_parms.tp_lite_short_min_count_rate_rtn_mcps;
-	break;
-
-	default:
-		*ptuning_parm_value = 0x7FFFFFFF;
-		status = VL53L1_ERROR_INVALID_PARAMS;
-	break;
-
-	}
-
-	LOG_FUNCTION_END(status);
-
-	return status;
-}
-
-static VL53L1_Error set_tuning_parm(
-	VL53L1_DEV            Dev,
-	VL53L1_TuningParms    tuning_parm_key,
-	int32_t               tuning_parm_value)
-{
-
-	/*
-	 * Sets the requested tuning parm value
-	 * - Large case statement for set value
-	 * - if key does not match, INVALID parm error returned
-	 */
-
-	VL53L1_Error  status = VL53L1_ERROR_NONE;
-
-	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
-
-	LOG_FUNCTION_START("");
-
-	switch (tuning_parm_key) {
-
-	case VL53L1_TUNINGPARM_LITE_LONG_SIGMA_THRESH_MM:
-		pdev->tuning_parms.tp_lite_long_sigma_thresh_mm =
-				(uint16_t)tuning_parm_value;
-	break;
-	case VL53L1_TUNINGPARM_LITE_MED_SIGMA_THRESH_MM:
-		pdev->tuning_parms.tp_lite_med_sigma_thresh_mm =
-				(uint16_t)tuning_parm_value;
-	break;
-	case VL53L1_TUNINGPARM_LITE_SHORT_SIGMA_THRESH_MM:
-		pdev->tuning_parms.tp_lite_short_sigma_thresh_mm =
-				(uint16_t)tuning_parm_value;
-	break;
-	case VL53L1_TUNINGPARM_LITE_LONG_MIN_COUNT_RATE_RTN_MCPS:
-		pdev->tuning_parms.tp_lite_long_min_count_rate_rtn_mcps =
-				(uint16_t)tuning_parm_value;
-	break;
-	case VL53L1_TUNINGPARM_LITE_MED_MIN_COUNT_RATE_RTN_MCPS:
-		pdev->tuning_parms.tp_lite_med_min_count_rate_rtn_mcps =
-				(uint16_t)tuning_parm_value;
-	break;
-	case VL53L1_TUNINGPARM_LITE_SHORT_MIN_COUNT_RATE_RTN_MCPS:
-		pdev->tuning_parms.tp_lite_short_min_count_rate_rtn_mcps =
-				(uint16_t)tuning_parm_value;
-	break;
-
-	default:
-		status = VL53L1_ERROR_INVALID_PARAMS;
-	break;
-
-	}
-
-	LOG_FUNCTION_END(status);
-
-	return status;
-}
 

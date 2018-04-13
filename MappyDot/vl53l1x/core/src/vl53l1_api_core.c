@@ -435,10 +435,10 @@ VL53L1_Error VL53L1_set_part_to_part_data(
 
 	LOG_FUNCTION_START("");
 
-	if (pcal_data->struct_version !=
+	/*if (pcal_data->struct_version !=
 		VL53L1_LL_CALIBRATION_DATA_STRUCT_VERSION) {
 		status = VL53L1_ERROR_INVALID_PARAMS;
-	}
+	}*/
 
 	if (status == VL53L1_ERROR_NONE) {
 
@@ -517,8 +517,8 @@ VL53L1_Error VL53L1_get_part_to_part_data(
 
 	LOG_FUNCTION_START("");
 
-	pcal_data->struct_version =
-			VL53L1_LL_CALIBRATION_DATA_STRUCT_VERSION;
+	//pcal_data->struct_version =
+	//		VL53L1_LL_CALIBRATION_DATA_STRUCT_VERSION;
 
 	/* memcpy(DEST, SRC, N)  */
 	memcpy(
@@ -2977,7 +2977,6 @@ VL53L1_Error VL53L1_get_tuning_debug_data(
 }
 #endif
 
-#ifdef PAL_EXTENDED
 VL53L1_Error VL53L1_get_tuning_parm(
 	VL53L1_DEV                     Dev,
 	VL53L1_TuningParms             tuning_parm_key,
@@ -3239,9 +3238,7 @@ VL53L1_Error VL53L1_get_tuning_parm(
 
 	return status;
 }
-#endif
 
-#ifdef PAL_EXTENDED
 VL53L1_Error VL53L1_set_tuning_parm(
 	VL53L1_DEV            Dev,
 	VL53L1_TuningParms    tuning_parm_key,
@@ -3515,6 +3512,6 @@ VL53L1_Error VL53L1_set_tuning_parm(
 
 	return status;
 }
-#endif
+
 
 /* End Patch_AddedTuningParms_11761 */

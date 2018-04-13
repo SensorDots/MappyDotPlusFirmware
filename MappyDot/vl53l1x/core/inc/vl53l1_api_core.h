@@ -1110,12 +1110,11 @@ VL53L1_Error VL53L1_get_vhv_loopbound(
  * @return  "Other error code"    See ::VL53L1_Error
  */
 
-#ifdef PAL_EXTENDED
 VL53L1_Error VL53L1_get_tuning_parm(
 	VL53L1_DEV                     Dev,
 	VL53L1_TuningParms             tuning_parm_key,
 	int32_t                       *ptuning_parm_value);
-#endif
+
 
 /**
  * @brief Generic Tuning Parameter set function
@@ -1138,12 +1137,11 @@ VL53L1_Error VL53L1_get_tuning_parm(
  * @return  "Other error code"    See ::VL53L1_Error
  */
 
-#ifdef PAL_EXTENDED
 VL53L1_Error VL53L1_set_tuning_parm(
 	VL53L1_DEV                     Dev,
 	VL53L1_TuningParms             tuning_parm_key,
 	int32_t                        tuning_parm_value);
-#endif
+
 
 
 #ifdef __cplusplus

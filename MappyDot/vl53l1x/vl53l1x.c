@@ -83,12 +83,16 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 	    *status = VL53L1_SetCalibrationData(device, calibration);
 	}
 
+	if( *status == VL53L1_ERROR_NONE)
+	{
+	    *status = VL53L1_GetCalibrationData(device, calibration);
+	}
+
 	/*if (*status == VL53L1_ERROR_NONE )
 	{
 		*status = VL53L1_PerformRefSpadManagement(device);
 	}*/
 
-	//Device starts with 15degree FOV with low power ranging by default. Normally the API settings this to 27 in autonomous ranging mode
 	if( *status == VL53L1_ERROR_NONE )
 	{
  		setRegionOfInterest(device,status,ROI);
@@ -98,8 +102,8 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 	{
 		setRangingMeasurementMode(device,status,measurement_mode,measurement_budget);
 	}
+
 	setRangingMode(device, status, ranging_mode, measurement_mode, measurement_budget);
-	
 
     if( *status == VL53L1_ERROR_NONE )
     {
@@ -115,14 +119,20 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 void setRegionOfInterest(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_UserRoi_t * ROI)
 {
     *status = VL53L1_SetUserROI(device,ROI);
+
+	/* Set a default if failed */
 	if (*status !=  VL53L1_ERROR_NONE )
 	{
 		ROI->TopLeftX = 0;
 		ROI->TopLeftY = 15;
 		ROI->BotRightX = 15;
 		ROI->BotRightY = 0;
+
 		*status = VL53L1_SetUserROI(device,ROI);
 	}
+
+	/* Get "set" User ROI */
+	VL53L1_GetUserROI(device,ROI);
 }
 
 void waitDeviceReady(VL53L1_Dev_t * device, VL53L1_Error * status)
@@ -130,11 +140,25 @@ void waitDeviceReady(VL53L1_Dev_t * device, VL53L1_Error * status)
 	*status = VL53L1_WaitDeviceBooted(device);
 }
 
+uint16_t readSigma(VL53L1_Dev_t * device, VL53L1_Error * status)
+{
+	uint16_t temp; //result__sigma_sd1 (fixed point 14.2)
+	VL53L1_RdWord(device, VL53L1_RESULT__SIGMA_SD1, &temp);
+	return temp;
+}
+
+/**
+ * \brief Control the crosstalk compensation
+ * 
+ * \param device
+ * \param status
+ * \param enabled - 0 for off, 1 for on
+ * 
+ * \return void
+ */
 void setCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t enabled)
 {
-
     *status = VL53L1_SetXTalkCompensationEnable(device,enabled); 
-
 }
 
 
@@ -143,7 +167,9 @@ void setCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t enabled)
  * 
  * \param device
  * \param status
- * \param mode - 0 for single, 1 for continuous
+ * \param single_mode - 1 for single, 0 for continuous
+ * \param measurement_mode
+ * \param measurement_budget - in ms
  * 
  * \return void
  */
@@ -160,12 +186,10 @@ void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single
 
     }
     else
-    {  
-	    
+    {
 	    TIMER_2_stop();
 
 		PALDevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_SINGLESHOT);
-
     }
 	
 	resetVL53L1Interrupt(device, status);
@@ -173,7 +197,16 @@ void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single
 	
 }
 
-//Signal is set in KCps (kilo), sigma is set in mm
+/**
+ * \brief Set the limit check values
+ * 
+ * \param device
+ * \param status
+ * \param signal - set in KCps (kilo)
+ * \param sigma  - set in mm
+ * 
+ * \return void
+ */
 void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signal, uint8_t sigma)
 {
     
@@ -192,7 +225,8 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
  * 
  * \param device
  * \param status
- * \param rangingMode
+ * \param measurement_mode
+ * \param measurement_budget - in ms
  * 
  * \return uint16_t
  */
@@ -200,10 +234,9 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
 {
 	if (measurement_mode == MED_RANGE) measurement_mode = VL53L1_DISTANCEMODE_MEDIUM;
 	else if (measurement_mode == LONG_RANGE) measurement_mode = VL53L1_DISTANCEMODE_LONG;
-	else measurement_mode = VL53L1_DISTANCEMODE_SHORT; //if (measurement_mode == SHORT_RANGE) measurement_mode = VL53L1_DISTANCEMODE_SHORT;
+	else measurement_mode = VL53L1_DISTANCEMODE_SHORT;
 
 	*status = VL53L1_SetPresetMode(device, VL53L1_PRESETMODE_LITE_RANGING, measurement_mode, measurement_budget, measurement_budget);
-
 
 	return 0;
 }
@@ -214,8 +247,7 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
  * 
  * \param device
  * \param status
- * \param refSpadCount
- * \param ApertureSpads
+ * \param calibration - calibration data
  * 
  * \return uint8_t
  */
@@ -233,12 +265,12 @@ uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_Calib
 
 
 /**
- * \brief Calibrate Distance Offset (with white target at 100mm)
+ * \brief Calibrate Distance Offset
  * 
  * \param device
  * \param status
- * \param referenceDistanceMM
- * \param pOffsetMicroMeter
+ * \param calibration - calibration data
+ * \param calibration_distance_mm
  * 
  * \return uint8_t
  */
@@ -255,12 +287,12 @@ uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL
 
 
 /**
- * \brief Calibrate Crosstalk/Cover (with gray target at 400mm)
+ * \brief Calibrate Crosstalk/Cover
  * 
  * \param device
  * \param status
- * \param referenceDistanceMM
- * \param pXTalkCompensationRateMegaCps
+ * \param calibration - calibration data
+ * \param calibration_distance_mm
  * 
  * \return uint8_t
  */
@@ -288,8 +320,8 @@ uint8_t calibrateCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_
 uint16_t resetVL53L1Interrupt(VL53L1_Dev_t * device, VL53L1_Error * status)
 {
     //Reset interrupt
-	//return VL53L1_ClearInterruptAndStartMeasurement(device); //This start measurement function returns weird results. Don't use it!!!!
-    return VL53L1_clear_interrupt(device);
+	return VL53L1_ClearInterruptAndStartMeasurement(device); //Required for ROI to work.
+    //return VL53L1_clear_interrupt(device);
     return 0;
 }
 
@@ -341,32 +373,7 @@ void stopContinuous(VL53L1_Dev_t * device, VL53L1_Error * status)
 uint16_t readRange(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_RangingMeasurementData_t *RangingMeasurementData )
 {
     VL53L1_GetRangingMeasurementData(device, RangingMeasurementData);
-	//*status = VL53L1_SetLimitCheckEnable(device,	VL53L1_CHECKENABLE_SIGMA_FINAL_RANGE, 1);
-	//*status = VL53L1_SetLimitCheckEnable(device,	VL53L1_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE, 1);
-    //resetVL53L1Interrupt(device, status);
+	
     return 0;
 }
-
-/**
- * \brief Set region of interest
- * 
- * \param device
- * \param status
- * \param topLeftX
- * \param topLeftY
- * \param bottomRightX
- * \param bottomRightY
- * 
- * \return VL53L1_Error
- */
-/*VL53L1_Error setROI(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t topLeftX, uint8_t topLeftY, uint8_t bottomRightX, uint8_t bottomRightY )
-{
-    VL53L1_UserRoi_t roiConfig;
-    roiConfig.TopLeftX  = topLeftX % 16;
-    roiConfig.TopLeftY  = topLeftY % 16;
-    roiConfig.BotRightX = bottomRightX % 16;
-    roiConfig.BotRightY = bottomRightY % 16;
-    return VL53L1_SetUserROI(device, &roiConfig);
-}*/
-
 

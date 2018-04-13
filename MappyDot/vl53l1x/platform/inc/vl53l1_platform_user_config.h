@@ -70,7 +70,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	     Check applies to pre-range, mm1 and mm2 ranges
 	     Format 14.2 0x0040 -> 16.0mm. */
 
-#define VL53L1_MAX_USER_ZONES                 1
+#define VL53L1_MAX_USER_ZONES                 169
 	/*!< Max number of user Zones - maximal limitation from
 		 FW stream divide - value of 254 */
 
