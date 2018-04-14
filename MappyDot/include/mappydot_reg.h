@@ -71,6 +71,8 @@
 #define VL53L1X_NOT_SHUTDOWN                        (0x48)
 #define VL53L1X_SHUTDOWN                            (0x68)
 #define READ_NONFILTERED_VALUE                      (0x6a)
+#define AMBIENT_RATE_RETURN                         (0x41)
+#define SIGNAL_RATE_RETURN                          (0x4A)
 
 /* Super Advanced */
 #define ENTER_FACTORY_MODE                          (0x23) //"#"//"!#!#!#"

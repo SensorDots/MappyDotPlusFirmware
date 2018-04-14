@@ -135,7 +135,9 @@
 #define TUNING_MAX_SIMPLE_OFFSET_CALIBRATION_SAMPLE_NUMBER 50
 /* Maximum loops to perform simple offset calibration */
 
-#define FDA_MAX_TIMING_BUDGET_US 550000
+#define FDA_MAX_TIMING_BUDGET_US 1000000
+
+//#define FDA_MAX_TIMING_BUDGET_US 550000
 /* Maximum timing budget allowed codex #456189*/
 
 

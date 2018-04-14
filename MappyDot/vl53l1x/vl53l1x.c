@@ -116,6 +116,15 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
     }
 }
 
+/**
+ * \brief Sets the region of interest
+ * 
+ * \param device
+ * \param status
+ * \param ROI - region of interest struct
+ * 
+ * \return void
+ */
 void setRegionOfInterest(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_UserRoi_t * ROI)
 {
     *status = VL53L1_SetUserROI(device,ROI);
@@ -135,16 +144,17 @@ void setRegionOfInterest(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_Us
 	VL53L1_GetUserROI(device,ROI);
 }
 
+/**
+ * \brief Wait until device has booted
+ * 
+ * \param device
+ * \param status
+ * 
+ * \return void
+ */
 void waitDeviceReady(VL53L1_Dev_t * device, VL53L1_Error * status)
 {
 	*status = VL53L1_WaitDeviceBooted(device);
-}
-
-uint16_t readSigma(VL53L1_Dev_t * device, VL53L1_Error * status)
-{
-	uint16_t temp; //result__sigma_sd1 (fixed point 14.2)
-	VL53L1_RdWord(device, VL53L1_RESULT__SIGMA_SD1, &temp);
-	return temp;
 }
 
 /**
@@ -192,8 +202,8 @@ void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single
 		PALDevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_SINGLESHOT);
     }
 	
-	resetVL53L1Interrupt(device, status);
 	VL53L1_StartMeasurement(device);
+	resetVL53L1Interrupt(device, status);
 	
 }
 
@@ -339,7 +349,7 @@ VL53L1_Error startSingleRangingMeasurement(VL53L1_Dev_t * device, VL53L1_Error *
     //VL53L1_Error   Status = VL53L1_ERROR_NONE;
 	*status = VL53L1_ERROR_NONE;
 
-	resetVL53L1Interrupt(device, status);
+	//resetVL53L1Interrupt(device, status);
 	VL53L1_StartMeasurement(device);
 
     return 0;

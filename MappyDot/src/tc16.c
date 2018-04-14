@@ -159,7 +159,8 @@ int8_t TIMER_2_init()
 	TCCR4B = (0 << WGM43) | (0 << WGM42)                /* TC16 Mode 0 Normal */
 	         | 0 << ICNC4                               /* Input Capture Noise Canceler: disabled */
 	         | 0 << ICES4                               /* Input Capture Edge Select: disabled */
-	         | (0 << CS42) | (1 << CS41) | (1 << CS40); /* IO clock divided by 64 */
+	         //| (0 << CS42) | (1 << CS41) | (1 << CS40); /* IO clock divided by 64 */
+			 | (1 << CS42) | (0 << CS41) | (0 << CS40); /* IO clock divided by 256 */
 
 	// ICR4 = 0; /* Input capture value, used as top counter value in some modes: 0 */
 

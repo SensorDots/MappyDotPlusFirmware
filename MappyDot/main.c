@@ -97,11 +97,13 @@ VL53L1_RangingMeasurementData_t measure;
 VL53L1_Error status;
 VL53L1_UserRoi_t ROI;
 
-uint16_t filtered_distance;
-uint16_t real_distance;
-uint8_t error_code;
-uint16_t distance_error;
-uint16_t current_millimeters  = 0;
+uint16_t filtered_distance         = 0;
+uint16_t real_distance             = 0;
+uint8_t error_code                 = 0;
+uint16_t distance_error            = 0;
+uint16_t current_millimeters       = 0;
+uint16_t signal_rate_rtn_mega_cps  = 0;
+uint16_t ambient_rate_rtn_mega_cps = 0;
 
 bool filtering_enabled  = 1;
 bool averaging_enabled  = 0;
@@ -117,6 +119,7 @@ uint8_t current_measurement_mode      = MED_RANGE;
 uint32_t led_threshold                = 300;
 uint32_t gpio_threshold               = 300;
 uint8_t averaging_size                = 4;
+uint8_t current_average_size          = 0;
 uint8_t intersensor_crosstalk_delay   = 0;
 uint8_t intersensor_crosstalk_timeout = 40; //40*ticks
 uint16_t measurement_budget           = 41; //ms
@@ -127,9 +130,14 @@ uint8_t sigma_limit_check             = 15;
 VL53L1_CalibrationData_t calibration_data;
 bool got_calibration_data = false;
 
-int8_t led_pulse = 0;
-uint8_t led_pulse_dir = 0;
+int8_t led_pulse           = 0;
+uint8_t led_pulse_dir      = 0;
 uint16_t led_pulse_timeout = 0;
+uint8_t ignore_next_filter = 0;
+
+#define SETTLE_MEASUREMENTS 2
+int8_t run_until_settle    = SETTLE_MEASUREMENTS;
+
 
 /* Command handler */
 bool command_to_handle;
@@ -202,8 +210,6 @@ int main(void)
         slave_address = FLASH_0_read_eeprom_byte(EEPROM_ADDRESS_BYTE);
         FLASH_0_write_eeprom_byte(EEPROM_BOOTLOADER_BYTE, 0x00);
     }
-
-
 
     if (slave_address <= 0)
     {
@@ -299,7 +305,8 @@ int main(void)
 	/* Assign struct to pointer */
 	pDevice = &device;
 
-	if (!init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+	/* Run init in continous mode (0) until measurements settle */
+	if (!init_ranging(pDevice, &status, 0, current_measurement_mode, measurement_budget, &ROI,
 					  &calibration_data, got_calibration_data))
 	{
 		/* Ops we had an init failure */
@@ -317,7 +324,6 @@ int main(void)
 	#endif
 
 	measurement_interrupt_fired = false;
-	resetVL53L1Interrupt(pDevice, &status);
 
 	int32_t crosstalkTimeout = intersensor_crosstalk_timeout * 1000;
 
@@ -328,6 +334,11 @@ int main(void)
 
 	static uint8_t led_duty_cycle = 0;
     static uint8_t gpio_duty_cycle = 0;
+
+	//Reset pullup on interrupt pin.
+	GPIO1_set_pull_mode(PORT_PULL_UP);
+
+	resetVL53L1Interrupt(pDevice, &status);
 
 	#ifdef NO_INT
 	uint32_t no_interrupt_counter = 0;
@@ -411,8 +422,13 @@ int main(void)
 				/* Read current mm */
 				readRange(pDevice, &status, &measure);
 
-				if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
-				else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+				if (run_until_settle < 0)
+				{
+					if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
+					else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+				} else {
+					resetVL53L1Interrupt(pDevice, &status);
+				}
 
 				error_code = measure.RangeStatus;
 				
@@ -425,6 +441,8 @@ int main(void)
 				}			
 
 				distance_error = measure.SigmaMilliMeter >> 16; 
+				signal_rate_rtn_mega_cps = measure.SignalRateRtnMegaCps >> 16;
+				ambient_rate_rtn_mega_cps = measure.AmbientRateRtnMegaCps >> 16;
 
 				/* 0 is invalid measurement */
 
@@ -437,31 +455,62 @@ int main(void)
 				real_distance = current_millimeters;
 				filtered_distance = real_distance;
 
+#ifndef DEV_DISABLE
+				/* Push current measurement into ring buffer for averaging */
+				hb_push_back(&history_buffer, &filtered_distance);
+
 				if (filtered_distance != 0)
 				{
-                
-	#ifndef DEV_DISABLE
-
 					if (filtering_enabled)
+					{
 						filtered_distance = bwlpf(filtered_distance, &low_pass_filter_state);
 
 						/* Ignore filtered distance if over max, this can happen when there is a rapid change 
 						   from no measurement to large value. This is because the filter does take time to settle
 						   but during this time the error code will generally be 7 */
-						if (filtered_distance > MAX_DIST)
+						if (ignore_next_filter > 0)
+						{
 							filtered_distance = real_distance;
+							ignore_next_filter--;
+						}
+
+						if ((filtered_distance > MAX_DIST || distance_error == 7) && !ignore_next_filter)
+						{
+							filtered_distance = real_distance;
+							ignore_next_filter = FILTER_ORDER * 2;
+						}
+					}
 
 					/* Averaging happens after filtering */
 					if (averaging_enabled)
 					{
-						//Push current measurement into ring buffer for filtering
-						hb_push_back(&history_buffer, &filtered_distance);
-						filtered_distance = avg(history_buffer.buffer,averaging_size);
+						/* Wait for history buffer to fill */
+						if (current_average_size < averaging_size)
+						{
+							filtered_distance = real_distance;
+							current_average_size++;
+						}
+						else
+						{
+							filtered_distance = avg(history_buffer.buffer,averaging_size);
+						}
 					}
-	#endif
-				}
 
+				}
+	#endif
 				read_interrupt = 1;
+
+				/* We run continuous measurements until the device settles after init. When in single shot mode
+				   on startup, the interrupts don't fire after first few tries, but they do after that. */
+				if (run_until_settle == 0)
+				{
+					setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+					run_until_settle--;
+				}
+				else if (run_until_settle > 0)
+				{
+					run_until_settle--;
+				}
 			
 				/* Output modes */
 				if (!factory_mode) 
@@ -639,7 +688,9 @@ static void reset_vl53l1x_ranging()
 	//delay_ms(T_BOOT_MS);
 	waitDeviceReady(pDevice,&status);
 
-    init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+	run_until_settle    = SETTLE_MEASUREMENTS;
+
+    init_ranging(pDevice, &status, 0, current_measurement_mode, measurement_budget, &ROI,
 			        &calibration_data, got_calibration_data);
 
 }
@@ -700,7 +751,9 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			//delay_ms(T_BOOT_MS);
 			waitDeviceReady(pDevice,&status);
 
-			init_ranging(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget, &ROI,
+			run_until_settle    = SETTLE_MEASUREMENTS;
+
+			init_ranging(pDevice, &status, 0, current_measurement_mode, measurement_budget, &ROI,
 			&calibration_data, got_calibration_data);
             //vl53l0xStartup(device, status);
             vl53l1x_powerstate = 1;
@@ -1158,6 +1211,18 @@ uint8_t main_process_tx_command(uint8_t command, uint8_t * tx_buffer)
         return 2;
     }
 
+	else if (command == AMBIENT_RATE_RETURN)
+	{
+		mm_to_bytes(tx_buffer, ambient_rate_rtn_mega_cps);
+		return 2;
+	}
+
+	else if (command == SIGNAL_RATE_RETURN)
+	{
+		mm_to_bytes(tx_buffer, signal_rate_rtn_mega_cps);
+		return 2;
+	}
+
     else if (command == FIRMWARE_VERSION)
     {
         memcpy(tx_buffer, VERSION_STRING, 10);
@@ -1188,7 +1253,7 @@ ISR (PCINT0_vect)
 }
 
 
-/* No interrupt overflow (this will fire every ~500ms if no interrupt arrived) */
+/* No interrupt overflow (this will fire every ~2000ms if no interrupt arrived) */
 ISR(TIMER4_OVF_vect)
 {
     interrupt_timeout_interrupt_fired = true;
