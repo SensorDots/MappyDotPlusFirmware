@@ -424,7 +424,7 @@ int main(void)
 					current_millimeters = measure.RangeMilliMeter;
 				}			
 
-				distance_error = (uint32_t)measure.SigmaMilliMeter / 65536; 
+				distance_error = measure.SigmaMilliMeter >> 16; 
 
 				/* 0 is invalid measurement */
 
@@ -993,14 +993,13 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 	{
 		if (command == REGION_OF_INTEREST)
 		{
-			stopContinuous(pDevice, &status);
+			//stopContinuous(pDevice, &status);
 			ROI.TopLeftX = ((uint8_t)arg[0]) % 16;
 			ROI.TopLeftY = ((uint8_t)arg[1]) % 16;
 			ROI.BotRightX = ((uint8_t)arg[2]) % 16;
 			ROI.BotRightY = ((uint8_t)arg[3]) % 16;
 			setRegionOfInterest(pDevice,&status,&ROI);
-			//reset_vl53l1x_ranging();
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			//setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 
 		}
 	}

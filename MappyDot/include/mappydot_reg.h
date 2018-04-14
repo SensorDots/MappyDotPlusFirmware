@@ -16,7 +16,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-   More information about each register here - https://sensordots.org/mappydotreg
+   More information about each register here - https://sensordots.org/mappydotplusreg
 
 */
 
