@@ -10,7 +10,7 @@ When running with the bootloader, the compiled size needs to be under 0x7C00 byt
 
 ## Firmware Versions
 MappyDots can be queried for their firmware version with the I2C command N (0x4E). It returns a 10 byte character array representing the firmware version. Stable major releases of the binary firmware will be built and placed the the Releases directory.
-   - MDPFW_V1.0 (xx/xx/xxxx) - Release firmware. 
+   - MDPFW_V1.0 (15/03/2018) - Release firmware. 
     
 ## Features Under Development
    - Watchdog timer.
