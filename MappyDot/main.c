@@ -338,6 +338,8 @@ int main(void)
 	//Reset pullup on interrupt pin.
 	GPIO1_set_pull_mode(PORT_PULL_UP);
 
+	run_until_settle    = SETTLE_MEASUREMENTS;
+
 	resetVL53L1Interrupt(pDevice, &status);
 
 	#ifdef NO_INT
@@ -775,7 +777,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
             settings_buffer[SETTINGS_SIZE] = Crc8(settings_buffer, SETTINGS_SIZE);
             if (!factory_mode)
             {
-			    //TODO: check crc first and only write when changes are detected.
+				
                 FLASH_0_write_eeprom_block(EEPROM_USER_SETTINGS_START, settings_buffer, SETTINGS_SIZE + 1);
                 FLASH_0_write_eeprom_block(EEPROM_DEVICE_NAME, mappydot_name, 16);
 				FLASH_0_write_eeprom_block(EEPROM_USER_CALIB_START, calib_ptr, CALIB_SIZE);
