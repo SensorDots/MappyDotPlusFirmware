@@ -83,15 +83,26 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 	    *status = VL53L1_SetCalibrationData(device, calibration);
 	}
 
+
+	if (*status == VL53L1_ERROR_NONE && !got_calibration_data)
+	{
+		*status = VL53L1_PerformRefSpadManagement(device);
+	}
+
+	//Get calibration should be called first and foremost. This will always 
+	//be called first on a blank device since the set calibration function
+	//above isn't called unless the calibration data struct is populated.
+
 	if( *status == VL53L1_ERROR_NONE)
 	{
 	    *status = VL53L1_GetCalibrationData(device, calibration);
+		
+		if (calibration->customer.algo__crosstalk_compensation_plane_offset_kcps != 0)
+			setCrosstalk(device, status, 1);
+
 	}
 
-	/*if (*status == VL53L1_ERROR_NONE )
-	{
-		*status = VL53L1_PerformRefSpadManagement(device);
-	}*/
+	
 
 	if( *status == VL53L1_ERROR_NONE )
 	{
@@ -168,7 +179,9 @@ void waitDeviceReady(VL53L1_Dev_t * device, VL53L1_Error * status)
  */
 void setCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t enabled)
 {
+    //This has to be called before starting ranging
     *status = VL53L1_SetXTalkCompensationEnable(device,enabled); 
+
 }
 
 
@@ -188,7 +201,7 @@ void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single
     stopContinuous(device, status);
     if (!single_mode)
     {
-	    PALDevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK);
+	    VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK);
 		
 		#ifndef NO_INT
 		TIMER_2_init();
@@ -199,7 +212,7 @@ void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single
     {
 	    TIMER_2_stop();
 
-		PALDevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_SINGLESHOT);
+		VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_SINGLESHOT);
     }
 	
 	VL53L1_StartMeasurement(device);
@@ -263,12 +276,9 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
  */
 uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration)
 {
-    if (VL53L1_PerformRefSpadManagement(device) != VL53L1_ERROR_NONE) 
-	{
-		VL53L1_GetCalibrationData(device, calibration);
-	
-		return 1;
-	}
+    if (VL53L1_PerformRefSpadManagement(device) != VL53L1_ERROR_NONE) return 1;
+
+	VL53L1_GetCalibrationData(device, calibration);
 	
 	return 0;
 }
@@ -286,12 +296,11 @@ uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_Calib
  */
 uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration, uint16_t calibration_distance_mm)
 {
-    if (VL53L1_PerformOffsetCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) 
-	{
-		VL53L1_GetCalibrationData(device, calibration);
+    VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK); //Needs to be set, otherwise it returns range result 6
 
-		return 1;
-	}
+    if (VL53L1_PerformOffsetSimpleCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) return 1;
+	
+	VL53L1_GetCalibrationData(device, calibration);
 	return 0;
 }
 
@@ -308,13 +317,14 @@ uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL
  */
 uint8_t calibrateCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration, uint16_t calibration_distance_mm)
 {
+    VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK);
 
-	if (VL53L1_PerformSingleTargetXTalkCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) 
-	{
-	    VL53L1_GetCalibrationData(device, calibration);
+	if (VL53L1_PerformSingleTargetXTalkCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) return 1;
 	
-		return 1;
-	}
+	VL53L1_GetCalibrationData(device, calibration);
+
+	setCrosstalk(device,status,1);
+
 	return 0;
 }
 
@@ -330,8 +340,7 @@ uint8_t calibrateCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_
 uint16_t resetVL53L1Interrupt(VL53L1_Dev_t * device, VL53L1_Error * status)
 {
     //Reset interrupt
-	return VL53L1_ClearInterruptAndStartMeasurement(device); //Required for ROI to work.
-    //return VL53L1_clear_interrupt(device);
+	return VL53L1_ClearInterruptAndStartMeasurement(device);
     return 0;
 }
 
@@ -346,10 +355,8 @@ uint16_t resetVL53L1Interrupt(VL53L1_Dev_t * device, VL53L1_Error * status)
  */
 VL53L1_Error startSingleRangingMeasurement(VL53L1_Dev_t * device, VL53L1_Error * status )
 {
-    //VL53L1_Error   Status = VL53L1_ERROR_NONE;
 	*status = VL53L1_ERROR_NONE;
 
-	//resetVL53L1Interrupt(device, status);
 	VL53L1_StartMeasurement(device);
 
     return 0;

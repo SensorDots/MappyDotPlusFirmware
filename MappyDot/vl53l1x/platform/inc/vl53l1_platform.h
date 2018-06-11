@@ -397,6 +397,12 @@ VL53L1_Error VL53L1_WaitValueMaskEx(
 		uint8_t       mask,
 		uint32_t      poll_delay_ms);
 
+
+VL53L1_Error VL53L1_WaitUntilInterrupt(
+	VL53L1_Dev_t *pdev,
+	uint32_t      timeout_ms,
+	uint32_t      poll_delay_ms);
+
 #ifdef __cplusplus
 }
 #endif

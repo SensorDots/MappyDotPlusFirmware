@@ -83,7 +83,7 @@ typedef VL53L1_Dev_t *VL53L1_DEV;
  * like PALDevDataGet(FilterData.field)[i] or
  * PALDevDataGet(FilterData.MeasurementIndex)++
  */
-#define PALDevDataGet(Dev, field) (Dev->Data.field)
+#define VL53L1DevDataGet(Dev, field) (Dev->Data.field)
 
 
 /**
@@ -93,7 +93,7 @@ typedef VL53L1_Dev_t *VL53L1_DEV;
  * @param field     ST structure field name
  * @param data      Data to be set
  */
-#define PALDevDataSet(Dev, field, data) ((Dev->Data.field) = (data))
+#define VL53L1DevDataSet(Dev, field, data) ((Dev->Data.field) = (data))
 
 
 /**

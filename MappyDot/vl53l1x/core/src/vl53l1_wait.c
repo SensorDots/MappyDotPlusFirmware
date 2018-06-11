@@ -496,6 +496,7 @@ VL53L1_Error VL53L1_poll_for_range_completion(
 	 */
 
 	VL53L1_Error status = VL53L1_ERROR_NONE;
+
 	VL53L1_LLDriverData_t *pdev = VL53L1DevStructGetLLDriverHandle(Dev);
 
 	uint8_t  gpio__mux_active_high_hv = 0;
@@ -520,6 +521,11 @@ VL53L1_Error VL53L1_poll_for_range_completion(
 			interrupt_ready,
 			0x01,
 			VL53L1_POLLING_DELAY_MS);
+
+	/*status = VL53L1_WaitUntilInterrupt(
+		Dev,
+		timeout_ms,
+		VL53L1_POLLING_DELAY_MS);*/
 
 	LOG_FUNCTION_END(status);
 

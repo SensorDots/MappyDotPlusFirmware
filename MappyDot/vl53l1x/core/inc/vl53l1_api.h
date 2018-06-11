@@ -962,7 +962,7 @@ VL53L1_Error VL53L1_GetXTalkCompensationEnable(VL53L1_DEV Dev,
  * @note This function Access to the device
  *
  * @param   Dev                  Device Handle
- * @param   XTalkCalDistance     Target distance in mm
+ * @param   CalDistanceMilliMeter     Target distance in mm
  * The calibration uses current preset and distance mode without altering them.
  * <br>User must call @a VL53L1_SetPresetMode() with
  * VL53L1_PRESETMODE_AUTONOMOUS, VL53L1_PRESETMODE_LITE_RANGING or
@@ -972,7 +972,7 @@ VL53L1_Error VL53L1_GetXTalkCompensationEnable(VL53L1_DEV Dev,
  * @return  "Other error code"   See ::VL53L1_Error
  */
 VL53L1_Error VL53L1_PerformSingleTargetXTalkCalibration(VL53L1_DEV Dev,
-		int32_t XTalkCalDistance);
+		int32_t CalDistanceMilliMeter);
 
 
 /**

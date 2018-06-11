@@ -58,7 +58,7 @@
 #warning Some functions are disabled with DEV_DISABLE
 #endif
 
-#define VERSION_STRING                "MDPFW_V1.0"
+#define VERSION_STRING                "MDPFW_V1.1"
 
 #define EEPROM_ADDRESS_BYTE           0x01
 #define EEPROM_BOOTLOADER_BYTE        0x02
@@ -150,7 +150,7 @@ static volatile bool interrupt_timeout_interrupt_fired = false;
 static volatile bool crosstalk_interrupt_fired = false;
 static volatile bool calibrating = false;
 uint8_t mappydot_name[16];
-uint8_t settings_buffer[SETTINGS_SIZE + 2 + 1]; //Last byte is CRC (+2 is not stored settings for code reuse)
+uint8_t settings_buffer[SETTINGS_SIZE + 2]; //(+2 is for code reuse)
 
 int main(void)
 {	   
@@ -267,7 +267,7 @@ int main(void)
 	//TODO "De-boilerplate" this:
 
     /* Read User settings */
-    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START, settings_buffer, SETTINGS_SIZE + 1); //+1 is CRC
+    FLASH_0_read_eeprom_block(EEPROM_USER_SETTINGS_START, settings_buffer, SETTINGS_SIZE);
 
 	/* Read calibration data */
 	uint8_t * calib_ptr = (uint8_t *)&calibration_data;
@@ -276,10 +276,16 @@ int main(void)
 	uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
 
     /* Check Settings CRC */
-	uint8_t crc = Crc8(settings_buffer,SETTINGS_SIZE);
+	uint8_t crc = Crc8(settings_buffer, SETTINGS_SIZE);
 
+	/* Sanity checks CRC when EEPROM is all zeros */
 	if (crc == 0x00 && settings_buffer[2] == 0x00) crc = 0x01;
-    if (settings_buffer[SETTINGS_SIZE] != crc && FLASH_0_read_eeprom_byte(EEPROM_USER_CALIB_START + CALIB_SIZE + 1) != crc_calib)
+	if (crc_calib == 0x00 && calibration_data.customer.global_config__spad_enables_ref_0 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_1 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_2 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_3 == 0x00) crc_calib = 0x01;
+
+    if (FLASH_0_read_eeprom_byte(EEPROM_USER_SETTINGS_START + SETTINGS_SIZE) != crc || FLASH_0_read_eeprom_byte(EEPROM_USER_CALIB_START + CALIB_SIZE + 1) != crc_calib)
     {
 	    
         read_default_settings();
@@ -425,7 +431,7 @@ int main(void)
 				readRange(pDevice, &status, &measure);
 
 				if (run_until_settle < 0)
-				{
+				{ 
 					if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
 					else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
 				} else {
@@ -503,7 +509,7 @@ int main(void)
 				read_interrupt = 1;
 
 				/* We run continuous measurements until the device settles after init. When in single shot mode
-				   on startup, the interrupts don't fire after first few tries, but they do after that. */
+				   on startup, the interrupts don't fire after first few tries due to VL53L1_RANGESTATUS_RANGE_VALID_NO_WRAP_CHECK_FAIL */
 				if (run_until_settle == 0)
 				{
 					setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
@@ -637,7 +643,7 @@ int main(void)
 static void read_default_settings()
 {
     /* If Bad, Check Defaults */
-    FLASH_0_read_eeprom_block(EEPROM_FACTORY_SETTINGS_START,settings_buffer,SETTINGS_SIZE + 1); //+1 is CRC
+    FLASH_0_read_eeprom_block(EEPROM_FACTORY_SETTINGS_START,settings_buffer,SETTINGS_SIZE);
 	uint8_t crc = Crc8(settings_buffer, SETTINGS_SIZE);
 
 	uint8_t * calib_ptr = (uint8_t *)&calibration_data;
@@ -649,10 +655,15 @@ static void read_default_settings()
 	/* settings_buffer[2] is measurement mode and shouldn't be zero */
 	if (crc == 0x00 && settings_buffer[2] == 0x00) crc = 0x01;
 
-    if (settings_buffer[SETTINGS_SIZE] != crc && FLASH_0_read_eeprom_byte(EEPROM_FACTORY_CALIB_START + CALIB_SIZE + 1) != crc_calib)
+	if (crc_calib == 0x00 && calibration_data.customer.global_config__spad_enables_ref_0 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_1 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_2 == 0x00
+		&& calibration_data.customer.global_config__spad_enables_ref_3 == 0x00) crc_calib = 0x01;
+
+    if (FLASH_0_read_eeprom_byte(EEPROM_FACTORY_SETTINGS_START + SETTINGS_SIZE) != crc || FLASH_0_read_eeprom_byte(EEPROM_FACTORY_CALIB_START + CALIB_SIZE + 1) != crc_calib)
     {
         /* Flash LED 4 times */
-        flash_led(100,4, 0);
+        flash_led(100, 4, 0);
 
         /* Use program defaults (do nothing) */
 		got_calibration_data = false;
@@ -663,6 +674,7 @@ static void read_default_settings()
     {
         /* Populate factory settings */
         set_settings(settings_buffer);
+
 		got_calibration_data = true;
     }
 }
@@ -815,27 +827,32 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
 		else if (command == ENABLE_CROSSTALK_COMPENSATION)
 		{
+		    stopContinuous(pDevice, &status);
 			setCrosstalk(pDevice, &status, 1);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 		}
 
 		else if (command == DISABLE_CROSSTALK_COMPENSATION)
 		{
+		    stopContinuous(pDevice, &status);
 			setCrosstalk(pDevice, &status, 0);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 		}
 
         else if (command == CALIBRATE_SPAD) 
 		{
 		    calibrating = true;
+
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if(calibrateSPAD(pDevice, &status, &calibration_data) == 1) //returns 0 if success
-			    flash_led(500,4,0); //error
+		    if(calibrateSPAD(pDevice, &status, &calibration_data) == 0) //returns 0 if success
+			{
+				flash_led(200,1,0);
+				got_calibration_data = true;
+			}   
 			else
-				{
-					flash_led(200,1,0);
-					got_calibration_data = true;
-				}
+				flash_led(500,4,0); //error
 
 			//Reset back to original ranging mode
 			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
@@ -996,26 +1013,27 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
         else if (command == CALIBRATE_DISTANCE_OFFSET) {
 		    calibrating = true;
+
+			/* Disable measurement interrupt */
+			/* PC3 - PCINT11 (PCMSK1) */
+			PCICR &= ~(1 << PCIE1);    // unset PCIE1 to enable PCMSK1 scan
+			PCMSK1 &= ~(1 << PCINT11);  // unset PCINT11 to trigger an interrupt on state change
+
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-			if(calibrateSPAD(pDevice, &status, &calibration_data) == 0) //returns 0 if success
+			if (calibrateDistanceOffset(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
 			{
-				//if(calibrateTemperature(pDevice, &status,&vhvSettings,&phaseCal) == 0) //returns 0 if success
-				//{
-					if (calibrateDistanceOffset(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
-					{
-						flash_led(200,1,0);
-						got_calibration_data = true;
-					}
-					else
-						flash_led(500,4,0); //error
-				//} else {
-				//	flash_led(500,4,0); //error
-				//}
-			} else {
-					flash_led(500,4,0); //error
+				flash_led(200,1,0);
+				got_calibration_data = true;
 			}
+			else
+				flash_led(500,4,0); //error
+
+			/* Enable measurement interrupt */
+			/* PC3 - PCINT11 (PCMSK1) */
+			PCICR |= (1 << PCIE1);    // set PCIE1 to enable PCMSK1 scan
+			PCMSK1 |= (1 << PCINT11);  // set PCINT11 to trigger an interrupt on state change
 
 			//Reset back to original ranging mode
 			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
@@ -1027,16 +1045,33 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
         else if (command == CALIBRATE_CROSSTALK) {
 		    calibrating = true;
+
+			/* Disable measurement interrupt */
+			/* PC3 - PCINT11 (PCMSK1) */
+			PCICR &= ~(1 << PCIE1);    // unset PCIE1 to enable PCMSK1 scan
+			PCMSK1 &= ~(1 << PCINT11);  // unset PCINT11 to trigger an interrupt on state change
+
 			//Set to single ranging mode (stop measurement)
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
-		    if (calibrateCrosstalk(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])))  //returns 0 if success
-				flash_led(500,4,0); //error
-			else
-			{
-				flash_led(200,1,0);
-				got_calibration_data = true;
+		    if (calibrateCrosstalk(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
+			{	
+			    // Check if no cover detected (getting similar values as no cover)
+				if (calibration_data.customer.algo__crosstalk_compensation_plane_offset_kcps == 0)
+				{
+					flash_led(500,4,0); //error
+				} else {
+					flash_led(200,1,0);
+					got_calibration_data = true;
+				}
 			}
+			else
+			    flash_led(500,4,0); //error
+			
+			/* Enable measurement interrupt */
+			/* PC3 - PCINT11 (PCMSK1) */
+			PCICR |= (1 << PCIE1);    // set PCIE1 to enable PCMSK1 scan
+			PCMSK1 |= (1 << PCINT11);  // set PCINT11 to trigger an interrupt on state change
 
 			//Reset back to original ranging mode
 			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
@@ -1063,17 +1098,28 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
     {
         //Check if we need to enter/exit factory mode (toggle the current mode)
         if (command == ENTER_FACTORY_MODE &&
-                arg[0] == '!' && arg[1] == '#' &&
-                arg[2] == '!' && arg[3] == '#' &&
-                arg[4] == '!' && arg[5] == '#') {
+			arg[0] == '!' && arg[1] == '#' &&
+			arg[2] == '!' && arg[3] == '#' &&
+			arg[4] == '!' && arg[5] == '#') {
 
-					factory_mode = !factory_mode;
-					if (factory_mode)
-					{
-						TIMER_1_init();
-						//led_pulse = 0;
-					}
-				}
+			factory_mode = !factory_mode;
+			if (factory_mode)
+			{
+				TIMER_1_init();
+				//led_pulse = 0;
+			}
+		}
+		// Erase all settings/EEPROM (when in factory mode)
+		if (command == WIPE_ALL_SETTINGS &&
+			arg[0] == '>' && arg[1] == '<' &&
+			arg[2] == '>' && arg[3] == '<' &&
+			arg[4] == '>' && arg[5] == '<' && factory_mode) {
+			for (int i = 0; i < 512; i++)
+			{
+				FLASH_0_write_eeprom_byte(i, 0xFF);
+			}
+
+		}
     }
     else if (arg_length == 16)
     {

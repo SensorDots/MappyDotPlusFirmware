@@ -27,6 +27,7 @@
 #include "mappydot_reg.h"
 #include "vl53l1_types.h"
 #include "nvmctrl.h"
+#include "crc8.h"
 
 /**
  * \brief _delay_ms helper function

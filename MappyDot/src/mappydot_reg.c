@@ -50,6 +50,8 @@ uint8_t check_command_size(uint8_t command)
 	if (command == REGION_OF_INTEREST)                      return 4;
 
     if (command == ENTER_FACTORY_MODE)                      return 6;
+	
+	if (command == WIPE_ALL_SETTINGS)                       return 6;
 
     if (command == NAME_DEVICE)                             return 16;
 

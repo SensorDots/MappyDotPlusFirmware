@@ -88,9 +88,9 @@ extern "C" {
 /** VL53L1 IMPLEMENTATION minor version */
 //#define VL53L1_IMPLEMENTATION_VER_MINOR       3
 /** VL53L1 IMPLEMENTATION sub version */
-//#define VL53L1_IMPLEMENTATION_VER_SUB         0
+//#define VL53L1_IMPLEMENTATION_VER_SUB         1
 /** VL53L1 IMPLEMENTATION sub version */
-//#define VL53L1_IMPLEMENTATION_VER_REVISION  1823
+//#define VL53L1_IMPLEMENTATION_VER_REVISION  1842
 
 /****************************************
  * PRIVATE define do not edit
@@ -167,6 +167,9 @@ typedef uint8_t VL53L1_XtalkCalibrationModes;
 #define VL53L1_XTALKCALIBRATIONMODE_SINGLE_TARGET \
 	((VL53L1_OffsetCalibrationModes)  1)
 /*!< To perform Xtalk calibration with one target */
+#define VL53L1_XTALKCALIBRATIONMODE_FULL_ROI \
+((VL53L1_OffsetCalibrationModes)  2)
+/*!< To perform Xtalk calibration based on histogram with full ROI */
 
 /** @} VL53L1_define_XtalkCal_group */
 
@@ -562,24 +565,24 @@ typedef struct {
 
 /* Defines */
 #define VL53L1_SETPARAMETERFIELD(Dev, field, value) \
-	(PALDevDataSet(Dev, CurrentParameters.field, value))
+	(VL53L1DevDataSet(Dev, CurrentParameters.field, value))
 
 #define VL53L1_GETPARAMETERFIELD(Dev, field, variable) \
-	(variable = PALDevDataGet(Dev, CurrentParameters).field)
+	(variable = VL53L1DevDataGet(Dev, CurrentParameters).field)
 
 
 #define VL53L1_SETARRAYPARAMETERFIELD(Dev, field, index, value) \
-	(PALDevDataSet(Dev, CurrentParameters.field[index], value))
+	(VL53L1DevDataSet(Dev, CurrentParameters.field[index], value))
 
 #define VL53L1_GETARRAYPARAMETERFIELD(Dev, field, index, variable) \
-	(variable = PALDevDataGet(Dev, CurrentParameters).field[index])
+	(variable = VL53L1DevDataGet(Dev, CurrentParameters).field[index])
 
 
 #define VL53L1_SETDEVICESPECIFICPARAMETER(Dev, field, value) \
-	(PALDevDataSet(Dev, DeviceSpecificParameters.field, value))
+	(VL53L1DevDataSet(Dev, DeviceSpecificParameters.field, value))
 
 #define VL53L1_GETDEVICESPECIFICPARAMETER(Dev, field) \
-	(PALDevDataGet(Dev, DeviceSpecificParameters).field)
+	(VL53L1DevDataGet(Dev, DeviceSpecificParameters).field)
 
 
 #define VL53L1_FIXPOINT1616TOFIXPOINT44(Value) \

@@ -2079,7 +2079,7 @@ VL53L1_Error VL53L1_init_and_start_range(
 		i2c_buffer_offset_bytes = \
 			VL53L1_DYNAMIC_CONFIG_I2C_INDEX - i2c_index;
 
-		/* If in back to back mode, use GPH ID from cfg_state */
+		// If in back to back mode, use GPH ID from cfg_state 
 		if ((psystem->system__mode_start &
 			VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK) ==
 			VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK) {

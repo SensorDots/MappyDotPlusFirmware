@@ -76,6 +76,7 @@
 
 /* Super Advanced */
 #define ENTER_FACTORY_MODE                          (0x23) //"#"//"!#!#!#"
+#define WIPE_ALL_SETTINGS                           (0x3c) //"<"//"><><><" (Must be in factory mode)
 
 /* Ranging Modes */
 #define SHORT_RANGE                                 (0x73)

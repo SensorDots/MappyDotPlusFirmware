@@ -60,9 +60,9 @@ extern "C" {
 /** VL53L1 Low Level DriverI IMPLEMENTATION sub version */
 #define VL53L1_LL_API_IMPLEMENTATION_VER_SUB         10
 /** VL53L1 Low Level Driver IMPLEMENTATION sub version */
-#define VL53L1_LL_API_IMPLEMENTATION_VER_REVISION    1082
+#define VL53L1_LL_API_IMPLEMENTATION_VER_REVISION    1840
 
-#define VL53L1_LL_API_IMPLEMENTATION_VER_STRING "1.2.10.1082"
+#define VL53L1_LL_API_IMPLEMENTATION_VER_STRING "1.2.11.1840"
 
 /** VL53L1_FIRMWARE min and max compatible revisions */
 #define VL53L1_FIRMWARE_VER_MINIMUM         398
@@ -1035,7 +1035,7 @@ typedef struct {
 /** @} VL53L1_globalLLDriverDefine_group */
 
 
-#define SUPPRESS_UNUSED_WARNING(x) \
+/*#define SUPPRESS_UNUSED_WARNING(x) \
 	((void) (x))
 
 
@@ -1053,7 +1053,11 @@ typedef struct {
 	while (0)
 
 #define VL53L1_COPYSTRING(str, ...) \
-	(strncpy(str, ##__VA_ARGS__, VL53L1_MAX_STRING_LENGTH-1))
+	(strncpy(str, ##__VA_ARGS__, VL53L1_MAX_STRING_LENGTH-1))*/
+
+#define SUPPRESS_UNUSED_WARNING(x)
+#define VL53L1_COPYSTRING(str, ...)
+#define IGNORE_STATUS(__FUNCTION_ID__, __ERROR_STATUS_CHECK__, __STATUS__) 
 
 #ifdef __cplusplus
 }

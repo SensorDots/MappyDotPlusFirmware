@@ -463,3 +463,41 @@ VL53L1_Error VL53L1_WaitValueMaskEx(
 	return status;
 }
 
+
+VL53L1_Error VL53L1_WaitUntilInterrupt(
+	VL53L1_Dev_t *pdev,
+	uint32_t      timeout_ms,
+	uint32_t      poll_delay_ms)
+{
+
+	VL53L1_Error status         = VL53L1_ERROR_NONE;
+	uint8_t      byte_value      = 0;
+	uint8_t      found           = 0;
+
+	/* wait until interrupt line is triggered or timeout reached */
+	while ((status == VL53L1_ERROR_NONE) &&
+		 		   (found == 0) && (timeout_ms > 0))
+	{
+	    timeout_ms--;
+
+
+		if(GPIO1_get_level() == 0)
+		{
+			found = 1;
+		}
+
+		if (status == VL53L1_ERROR_NONE  &&
+			found == 0 &&
+			poll_delay_ms > 0)
+			status = VL53L1_WaitMs(
+							pdev,
+							poll_delay_ms);
+		
+	}
+
+	if (found == 0 && status == VL53L1_ERROR_NONE)
+		status = VL53L1_ERROR_TIME_OUT;
+
+	return status;
+}
+
