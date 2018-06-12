@@ -37,12 +37,9 @@ void startContinuous(VL53L1_Dev_t * device, VL53L1_Error * status, uint32_t peri
  * \param status
  * \param ranging_mode
  * \param measurement_mode
- * \param refSpadCount
- * \param ApertureSpads
- * \param offsetMicroMeter
- * \param xTalkCompensationRateMegaCps
- * \param vhvSettings
- * \param phaseCal
+ * \param ROI
+ * \param calibration
+ * \param got_calibration_data
  * 
  * \return bool
  */
@@ -301,6 +298,7 @@ uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL
     if (VL53L1_PerformOffsetSimpleCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) return 1;
 	
 	VL53L1_GetCalibrationData(device, calibration);
+
 	return 0;
 }
 
@@ -323,7 +321,8 @@ uint8_t calibrateCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_
 	
 	VL53L1_GetCalibrationData(device, calibration);
 
-	setCrosstalk(device,status,1);
+	// Check if no cover detected (getting similar values as no cover; no compensation detected)
+	if (calibration->customer.algo__crosstalk_compensation_plane_offset_kcps == 0) return 1;
 
 	return 0;
 }

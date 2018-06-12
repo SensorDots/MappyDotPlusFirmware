@@ -785,7 +785,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			uint8_t * calib_ptr = (uint8_t *)&calibration_data;
 			uint8_t crc_calib = Crc8(calib_ptr, CALIB_SIZE);
 
-			/* Settings buffer is always 1 longer than actual settings */
+			/* Settings buffer is always bigger than actual settings for reduced code */
             settings_buffer[SETTINGS_SIZE] = Crc8(settings_buffer, SETTINGS_SIZE);
             if (!factory_mode)
             {
@@ -1056,17 +1056,13 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
 		    if (calibrateCrosstalk(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
 			{	
-			    // Check if no cover detected (getting similar values as no cover)
-				if (calibration_data.customer.algo__crosstalk_compensation_plane_offset_kcps == 0)
-				{
-					flash_led(500,4,0); //error
-				} else {
-					flash_led(200,1,0);
-					got_calibration_data = true;
-				}
+				flash_led(200,1,0);
+				got_calibration_data = true;
 			}
 			else
+			{
 			    flash_led(500,4,0); //error
+			}
 			
 			/* Enable measurement interrupt */
 			/* PC3 - PCINT11 (PCMSK1) */
