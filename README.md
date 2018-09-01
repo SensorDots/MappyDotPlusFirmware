@@ -14,7 +14,6 @@ MappyDots can be queried for their firmware version with the I2C command N (0x4E
    - MDPFW_V1.1 (12/06/2018) - Calibration fixes. Added erase settings function. Merged 2.3.1 API.
     
 ## Features Under Development
-   - Watchdog timer.
    - Inter-device crosstalk grouping. Will allow you to assign groups to devices to prevent crosstalk.
-   - Add VL53L1X Initisation Error Codes.
    - Assign new start address to master and assign master in firmware.
+   - Intersensor synchronisation. Will syncronise measurements to master.
