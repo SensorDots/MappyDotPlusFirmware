@@ -526,6 +526,7 @@ VL53L1_Error VL53L1_preset_mode_standard_ranging(
 	 * high  = 0x78 -> 15.0 -> 3.0m
 	 */
 	ptiming->range_config__valid_phase_low                    = 0x08;
+
 	ptiming->range_config__valid_phase_high                   = 0x78;
 	ptiming->system__intermeasurement_period                  = 0x00000000;
 	ptiming->system__fractional_enable                        = 0x00;

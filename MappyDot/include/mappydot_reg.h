@@ -57,6 +57,8 @@
 #define INTERSENSOR_CROSSTALK_REDUCTION_DISABLE     (0x74)
 #define INTERSENSOR_CROSSTALK_TIMEOUT               (0x71)
 #define INTERSENSOR_CROSSTALK_MEASUREMENT_DELAY     (0x51)
+#define INTERSENSOR_SYNC_ENABLE                     (0x59)
+#define INTERSENSOR_SYNC_DISABLE                    (0x79)
 
 /* Settings */
 #define FIRMWARE_VERSION                            (0x4e)

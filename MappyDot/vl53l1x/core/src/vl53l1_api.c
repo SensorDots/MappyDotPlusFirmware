@@ -139,7 +139,8 @@ static int32_t BDTable[VL53L1_TUNING_MAX_TUNABLE_KEY] = {
 		TUNING_SINGLE_TARGET_XTALK_SAMPLE_NUMBER,
 		TUNING_MIN_AMBIENT_DMAX_VALID,
 		TUNING_MAX_SIMPLE_OFFSET_CALIBRATION_SAMPLE_NUMBER,
-		TUNING_XTALK_FULL_ROI_TARGET_DISTANCE_MM
+		TUNING_XTALK_FULL_ROI_TARGET_DISTANCE_MM,
+		TUNING_SIMPLE_OFFSET_CALIBRATION_REPEAT
 };
 
 #define VL53L1_NVM_POWER_UP_DELAY_US             50
@@ -395,8 +396,8 @@ static VL53L1_Error SingleTargetXTalkCalibration(VL53L1_DEV Dev)
 {
 	VL53L1_Error Status = VL53L1_ERROR_NONE;
 
-	uint16_t sum_ranging = 0;
-	uint16_t sum_spads = 0;
+	uint32_t sum_ranging = 0;
+	uint32_t sum_spads = 0;
 	FixPoint1616_t sum_signalRate = 0;
 	FixPoint1616_t total_count = 0;
 	uint8_t xtalk_meas = 0;
@@ -472,10 +473,10 @@ static VL53L1_Error SingleTargetXTalkCalibration(VL53L1_DEV Dev)
 	if (total_count > 0) {
 		/* FixPoint1616_t / uint16_t = FixPoint1616_t */
 		xTalkStoredMeanSignalRate = sum_signalRate / total_count;
-		xTalkStoredMeanRange = (FixPoint1616_t)((uint32_t)(
-			(uint32_t)sum_ranging << 16) / total_count);
-		xTalkStoredMeanRtnSpads = (FixPoint1616_t)((uint32_t)(
-			(uint32_t)sum_spads << 16) / total_count);
+		xTalkStoredMeanRange = (FixPoint1616_t)(sum_ranging << 16);
+		xTalkStoredMeanRange /= total_count;
+		xTalkStoredMeanRtnSpads = (FixPoint1616_t)(sum_spads << 16);
+		xTalkStoredMeanRtnSpads /= total_count;
 
 		/* Round Mean Spads to Whole Number.
 		 * Typically the calculated mean SPAD count is a whole number
@@ -531,7 +532,7 @@ static VL53L1_Error SingleTargetXTalkCalibration(VL53L1_DEV Dev)
 
 		pC->algo__crosstalk_compensation_plane_offset_kcps =
 			(uint32_t)(1000 * ((XTalkCompensationRateMegaCps  +
-				(1<<6)) >> (16-9)));
+				((uint32_t)1<<6)) >> (16-9)));
 
 		Status = VL53L1_SetCalibrationData(Dev, &CalibrationData);
 		CHECK_ERROR_GO_ENDFUNC;
@@ -1331,11 +1332,16 @@ VL53L1_Error VL53L1_SetInterMeasurementPeriodMilliSeconds(VL53L1_DEV Dev,
 	uint32_t InterMeasurementPeriodMilliSeconds)
 {
 	VL53L1_Error Status = VL53L1_ERROR_NONE;
+	uint32_t adjustedIMP;
 
 	LOG_FUNCTION_START("");
 
+	/* Fix for Ticket 468205 actual measurement period shorter than set */
+	adjustedIMP = InterMeasurementPeriodMilliSeconds;
+	adjustedIMP += (adjustedIMP * 64) / 1000;
+	/* End of fix for Ticket 468205 */
 	Status = VL53L1_set_inter_measurement_period_ms(Dev,
-			InterMeasurementPeriodMilliSeconds);
+	adjustedIMP);
 
 	LOG_FUNCTION_END(Status);
 	return Status;
@@ -1345,11 +1351,15 @@ VL53L1_Error VL53L1_GetInterMeasurementPeriodMilliSeconds(VL53L1_DEV Dev,
 	uint32_t *pInterMeasurementPeriodMilliSeconds)
 {
 	VL53L1_Error Status = VL53L1_ERROR_NONE;
+	uint32_t adjustedIMP;
 
 	LOG_FUNCTION_START("");
 
-	Status = VL53L1_get_inter_measurement_period_ms(Dev,
-			pInterMeasurementPeriodMilliSeconds);
+	Status = VL53L1_get_inter_measurement_period_ms(Dev, &adjustedIMP);
+	/* Fix for Ticket 468205 actual measurement period shorter than set */
+	adjustedIMP -= (adjustedIMP * 64) / 1000;
+	*pInterMeasurementPeriodMilliSeconds = adjustedIMP;
+	/* End of fix for Ticket 468205 */
 
 	LOG_FUNCTION_END(Status);
 	return Status;
@@ -1737,9 +1747,12 @@ VL53L1_Error VL53L1_GetSequenceStepEnable(VL53L1_DEV Dev,
 
 VL53L1_Error VL53L1_StartMeasurement(VL53L1_DEV Dev)
 {
+#define TIMED_MODE_TIMING_GUARD_MILLISECONDS 4
 	VL53L1_Error Status = VL53L1_ERROR_NONE;
 	uint8_t DeviceMeasurementMode;
 	//VL53L1_State CurrPalState;
+	//VL53L1_Error lStatus;
+	//uint32_t MTBus, IMPms;
 
 	LOG_FUNCTION_START("");
 
@@ -1764,6 +1777,22 @@ VL53L1_Error VL53L1_StartMeasurement(VL53L1_DEV Dev)
 	}
 	*/
 	DeviceMeasurementMode = VL53L1DevDataGet(Dev, LLData.measurement_mode);
+
+   /* Check timing configuration between timing budget and
+	* inter measurement period */
+	//if ((Status == VL53L1_ERROR_NONE) &&
+		//(DeviceMeasurementMode == VL53L1_DEVICEMEASUREMENTMODE_TIMED)) {
+		//lStatus = VL53L1_GetMeasurementTimingBudgetMicroSeconds(Dev,
+				//&MTBus);
+		///* convert timing budget in ms */
+		//MTBus /= 1000;
+		//lStatus = VL53L1_GetInterMeasurementPeriodMilliSeconds(Dev,
+				//&IMPms);
+		///* trick to get rid of compiler "set but not used" warning */
+		//SUPPRESS_UNUSED_WARNING(lStatus);
+		//if (IMPms < MTBus + TIMED_MODE_TIMING_GUARD_MILLISECONDS)
+			//Status = VL53L1_ERROR_INVALID_PARAMS;
+	//}
 
 	if (Status == VL53L1_ERROR_NONE)
 		Status = VL53L1_init_and_start_range(
@@ -2445,17 +2474,19 @@ VL53L1_Error VL53L1_PerformOffsetCalibration(VL53L1_DEV Dev,
 #endif
 
 VL53L1_Error VL53L1_PerformOffsetSimpleCalibration(VL53L1_DEV Dev,
-	int32_t CalDistanceMilliMeter)
+int32_t CalDistanceMilliMeter)
 {
 	VL53L1_Error Status = VL53L1_ERROR_NONE;
 	int32_t sum_ranging;
 	uint8_t offset_meas;
-	uint8_t Max;
-	uint8_t total_count;
+	int16_t Max, UnderMax, OverMax, Repeat;
+	int32_t total_count, inloopcount;
+	int32_t IncRounding;
 	int16_t meanDistance_mm;
 	int16_t offset;
 	VL53L1_RangingMeasurementData_t RangingMeasurementData;
 	VL53L1_LLDriverData_t *pdev;
+	uint8_t goodmeas;
 
 	LOG_FUNCTION_START("");
 
@@ -2465,66 +2496,74 @@ VL53L1_Error VL53L1_PerformOffsetSimpleCalibration(VL53L1_DEV Dev,
 	pdev->customer.mm_config__inner_offset_mm = 0;
 	pdev->customer.mm_config__outer_offset_mm = 0;
 
-	Max = BDTable[VL53L1_TUNING_MAX_SIMPLE_OFFSET_CALIBRATION_SAMPLE_NUMBER];
-
-	//Perform a dummy measurement to prevent 
-	//VL53L1_RANGESTATUS_RANGE_VALID_NO_WRAP_CHECK_FAIL
-	//This happens once when you stop measurements and change to continuous
-	Status = VL53L1_StartMeasurement(Dev);
-	Status = VL53L1_WaitMeasurementDataReady(Dev);
-	Status = VL53L1_ClearInterruptAndStartMeasurement(Dev);
-	Status = VL53L1_WaitMeasurementDataReady(Dev);
-
-	//Start real measurements
-	Status = VL53L1_ClearInterruptAndStartMeasurement(Dev);
-
+	Repeat=BDTable[VL53L1_TUNING_SIMPLE_OFFSET_CALIBRATION_REPEAT];
+	Max=BDTable[VL53L1_TUNING_MAX_SIMPLE_OFFSET_CALIBRATION_SAMPLE_NUMBER];
+	UnderMax = 1 + (Max / 2);
+	OverMax = Max + (Max / 2);
 	sum_ranging = 0;
-	offset_meas = 0;
 	total_count = 0;
-	while ((Status == VL53L1_ERROR_NONE) && (offset_meas < Max)) {
+
+	while ((Repeat > 0) && (Status == VL53L1_ERROR_NONE)) {
+		Status = VL53L1_StartMeasurement(Dev);
+		/* Very first ranging completion interrupt must be ignored */
+		if (Status == VL53L1_ERROR_NONE)
 		Status = VL53L1_WaitMeasurementDataReady(Dev);
-		
-		if (Status == VL53L1_ERROR_NONE) {
+		if (Status == VL53L1_ERROR_NONE)
+		Status = VL53L1_GetRangingMeasurementData(Dev,
+		&RangingMeasurementData);
+		if (Status == VL53L1_ERROR_NONE)
+		Status = VL53L1_ClearInterruptAndStartMeasurement(Dev);
+		/* offset calibration main loop */
+		inloopcount = 0;
+		offset_meas = 0;
+		while ((Status == VL53L1_ERROR_NONE) && (inloopcount < Max) &&
+		(offset_meas < OverMax)) {
+			Status = VL53L1_WaitMeasurementDataReady(Dev);
+			if (Status == VL53L1_ERROR_NONE)
 			Status = VL53L1_GetRangingMeasurementData(Dev,
-					&RangingMeasurementData);
-		}
-		if (Status == VL53L1_ERROR_NONE) {
-			if (RangingMeasurementData.RangeStatus ==
-					VL53L1_RANGESTATUS_RANGE_VALID) {
+			&RangingMeasurementData);
+			goodmeas = (RangingMeasurementData.RangeStatus ==
+			VL53L1_RANGESTATUS_RANGE_VALID);
+			if ((Status == VL53L1_ERROR_NONE) && goodmeas) {
 				sum_ranging = sum_ranging +
-					RangingMeasurementData.RangeMilliMeter;
-				total_count++;
+				RangingMeasurementData.RangeMilliMeter;
+				inloopcount++;
 			}
-		}
-		if (Status == VL53L1_ERROR_NONE) {
-			Status = VL53L1_ClearInterruptAndStartMeasurement(
+			if (Status == VL53L1_ERROR_NONE) {
+				Status = VL53L1_ClearInterruptAndStartMeasurement(
 				Dev);
+			}
+			offset_meas++;
 		}
-		offset_meas++;
+		total_count += inloopcount;
+
+		/* no enough valid values found */
+		if (inloopcount < UnderMax) {
+			Status = VL53L1_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL;
+		}
+
+		VL53L1_StopMeasurement(Dev);
+
+		Repeat--;
+
 	}
-
-	VL53L1_StopMeasurement(Dev);
-
-	/* no valid values found */
-	if (total_count == 0) {
-		Status = VL53L1_ERROR_OFFSET_CAL_NO_SAMPLE_FAIL;
-	}
-
 	/* check overflow (unlikely if target is near to the device) */
 	if ((sum_ranging < 0) ||
-		(sum_ranging > ((int32_t) total_count * 0xffff))) {
+	(sum_ranging > ((int32_t) total_count * 0xffff))) {
 		Status = VL53L1_WARNING_OFFSET_CAL_SIGMA_TOO_HIGH;
 	}
 
-	if (Status == VL53L1_ERROR_NONE) {
-		meanDistance_mm = (int16_t)(sum_ranging / total_count);
+	if ((Status == VL53L1_ERROR_NONE) && (total_count > 0)) {
+		IncRounding = total_count / 2;
+		meanDistance_mm = (int16_t)((sum_ranging + IncRounding)
+		/ total_count);
 		offset = (int16_t)CalDistanceMilliMeter - meanDistance_mm;
 		pdev->customer.algo__part_to_part_range_offset_mm = 0;
 		pdev->customer.mm_config__inner_offset_mm = offset;
 		pdev->customer.mm_config__outer_offset_mm = offset;
 
 		Status = VL53L1_set_customer_nvm_managed(Dev,
-				&(pdev->customer));
+		&(pdev->customer));
 	}
 
 	LOG_FUNCTION_END(Status);
@@ -2760,11 +2799,11 @@ VL53L1_Error VL53L1_GetOpticalCenter(VL53L1_DEV Dev,
 				 //* Apply invert distance gain to thresholds */
 				//g = pdev->gain_cal.standard_ranging_gain_factor;
 				///* gain is ufix 5.11, convert to 16.16 */
-				//gain = (FixPoint1616_t) (g << 5);
-				//high1616 = (FixPoint1616_t)
-						//(pConfig->Distance.High << 16);
-				//low1616 = (FixPoint1616_t)
-						//(pConfig->Distance.Low << 16);
+				//gain = (FixPoint1616_t) ((uint32_t)g << 5);
+				//high1616 = (FixPoint1616_t) ((uint32_t)
+				//pConfig->Distance.High << 16);
+				//low1616 = (FixPoint1616_t) ((uint32_t)
+				//pConfig->Distance.Low << 16);
 				///* +32768 to round the results*/
 				//high1616 = (high1616 + 32768) / gain;
 				//low1616 = (low1616 + 32768) / gain;

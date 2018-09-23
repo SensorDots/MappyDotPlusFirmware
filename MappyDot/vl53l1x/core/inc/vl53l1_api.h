@@ -398,6 +398,9 @@ VL53L1_Error VL53L1_GetMeasurementTimingBudgetMicroSeconds(
  *
  * @param   Dev                                  Device Handle
  * @param   InterMeasurementPeriodMilliSeconds   Inter-Measurement Period in ms.
+ *  this value should be greater than the duration set in
+ *  @a VL53L1_SetMeasurementTimingBudgetMicroSeconds() to ensure smooth ranging
+ *  operation.
  * @return  VL53L1_ERROR_NONE            Success
  * @return  "Other error code"           See ::VL53L1_Error
  */
@@ -758,6 +761,11 @@ VL53L1_Error VL53L1_GetSequenceStepEnable(VL53L1_DEV Dev,
  * PresetMode programmed with @a VL53L1_SetPresetMode
  *
  * @return  VL53L1_ERROR_TIME_OUT    Time out on start measurement
+ * @return  VL53L1_ERROR_INVALID_PARAMS This error might occur in timed mode
+ * when inter measurement period is smaller or too close to the timing budget.
+ * In such case measurements are not started and user must correct the timings
+ * passed to @a VL53L1_SetMeasurementTimingBudgetMicroSeconds() and
+ * @a VL53L1_SetInterMeasurementPeriodMilliSeconds() functions.
  * @return  "Other error code"   See ::VL53L1_Error
  */
 VL53L1_Error VL53L1_StartMeasurement(VL53L1_DEV Dev);

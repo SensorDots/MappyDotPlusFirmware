@@ -58,7 +58,7 @@
 #warning Some functions are disabled with DEV_DISABLE
 #endif
 
-#define VERSION_STRING                "MDPFW_V1.1"
+#define VERSION_STRING                "MDPFW_V1.2"
 
 #define EEPROM_ADDRESS_BYTE           0x01
 #define EEPROM_BOOTLOADER_BYTE        0x02
@@ -126,6 +126,7 @@ uint16_t measurement_budget           = 41; //ms
 uint8_t read_interrupt                = 0;
 uint16_t signal_limit_check           = 1000;
 uint8_t sigma_limit_check             = 15;
+uint8_t intersensor_sync              = 0;
 
 VL53L1_CalibrationData_t calibration_data;
 bool got_calibration_data = false;
@@ -147,7 +148,7 @@ uint8_t todo_arg_length;
 
 static volatile bool measurement_interrupt_fired = false;
 static volatile bool interrupt_timeout_interrupt_fired = false;
-static volatile bool crosstalk_interrupt_fired = false;
+static volatile bool crosstalk_sync_interrupt_fired = false;
 static volatile bool calibrating = false;
 uint8_t mappydot_name[16];
 uint8_t settings_buffer[SETTINGS_SIZE + 2]; //(+2 is for code reuse)
@@ -376,23 +377,24 @@ int main(void)
 				command_to_handle = false;
 			}
 
-			if (crosstalk_enabled && crosstalk_interrupt_fired)
+			if (crosstalk_sync_interrupt_fired && 
+			    ((crosstalk_enabled) || (intersensor_sync && !is_master)))
 			{
-				crosstalk_interrupt_fired = false;
+				crosstalk_sync_interrupt_fired = false;
 
 				crosstalkTimeout = intersensor_crosstalk_timeout * 1000;
 
-				startSingleRangingMeasurement(pDevice, &status);
+				resetVL53L1Interrupt(pDevice, &status);
 			} 
 		
-			if (!crosstalk_interrupt_fired && is_master && crosstalk_enabled)
+			if (!crosstalk_sync_interrupt_fired && is_master && crosstalk_enabled)
 			{
 				crosstalkTimeout--;
 
-				/* trigger crosstalk retrigger timeout */
+				/* trigger crosstalk re-trigger timeout */
 				if (crosstalkTimeout <= 0)
 				{
-					crosstalk_interrupt_fired = true;
+					crosstalk_sync_interrupt_fired = true;
 					crosstalkTimeout = intersensor_crosstalk_timeout * 1000;
 				}
 			}
@@ -414,13 +416,12 @@ int main(void)
 
 				measurement_interrupt_fired = false;
 
-				if (crosstalk_enabled)
+				if (crosstalk_enabled || (intersensor_sync && is_master && current_ranging_mode == SET_CONTINUOUS_RANGING_MODE))
 				{
-					/* create trigger after measurement finished */
-					/* Note that for this to happen, we are in "crosstalk"
-					   (single) ranging mode */
+					/* Create trigger after measurement finished.
+					   For sync, we assume a new measurement is already underway on master */
 					ADDR_OUT_set_level(false);
-				}        
+				}     
 
 				/* If we are in measurement output modes */
 				if (led_mode == LED_MEASUREMENT_OUTPUT && !factory_mode) LED_set_level(false);
@@ -428,15 +429,27 @@ int main(void)
 				if (gpio_mode == GPIO_MEASUREMENT_INTERRUPT && !factory_mode) SYNC_set_level(true);
 
 				/* Read current mm */
-				readRange(pDevice, &status, &measure);
+				readRange(pDevice, &status, &measure);   
 
-				if (run_until_settle < 0)
-				{ 
-					if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
-					else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+				if (intersensor_sync || crosstalk_enabled)
+				{
+					if (is_master && intersensor_sync)
+					{
+						if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
+						else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+					}
+					// else do nothing
+
 				} else {
-					resetVL53L1Interrupt(pDevice, &status);
+					if (run_until_settle < 0)
+					{
+						if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) resetVL53L1Interrupt(pDevice, &status);
+						else if (current_ranging_mode == SET_SINGLE_RANGING_MODE) stopContinuous(pDevice, &status);
+						} else {
+						resetVL53L1Interrupt(pDevice, &status);
+					}
 				}
+
 
 				error_code = measure.RangeStatus;
 				
@@ -482,7 +495,7 @@ int main(void)
 							ignore_next_filter--;
 						}
 
-						if ((filtered_distance > MAX_DIST || distance_error == 7) && !ignore_next_filter)
+						if ((filtered_distance > MAX_DIST || distance_error >= 7) && !ignore_next_filter)
 						{
 							filtered_distance = real_distance;
 							ignore_next_filter = FILTER_ORDER * 2;
@@ -561,8 +574,8 @@ int main(void)
 
 					if (gpio_mode == GPIO_MEASUREMENT_INTERRUPT) SYNC_set_level(false);
 
-					/* Crosstalk pulse off - The timing of this is "dont care" */
-					if (crosstalk_enabled)
+					/* Crosstalk/sync pulse off - The timing of this is "dont care" */
+					if (crosstalk_enabled || (intersensor_sync && is_master && current_ranging_mode == SET_CONTINUOUS_RANGING_MODE))
 					{
 						/* remove pulse */
 						ADDR_OUT_set_level(true);
@@ -741,12 +754,49 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 {
     if (arg_length == 0)
     {	
-	    if (command == 0x2e) //Hidden ADDR_IN test command
+	    if (command == 0x2e && factory_mode) //Hidden ADDR test command high
 		{
 			ADDR_IN_set_dir(PORT_DIR_OUT);
 			ADDR_IN_set_level(true);
 			//delay_ms(200);
 			ADDR_IN_set_dir(PORT_DIR_IN);
+
+			ADDR_OUT_set_dir(PORT_DIR_OUT);
+			ADDR_OUT_set_level(true);
+			//delay_ms(200);
+			ADDR_OUT_set_dir(PORT_DIR_IN);
+		}
+		else if (command == 0x2f && factory_mode) //Hidden ADDR test command low
+		{
+			ADDR_IN_set_dir(PORT_DIR_OUT);
+			ADDR_IN_set_level(false);
+			//delay_ms(200);
+			ADDR_IN_set_dir(PORT_DIR_IN);
+
+			ADDR_OUT_set_dir(PORT_DIR_OUT);
+			ADDR_OUT_set_level(false);
+			//delay_ms(200);
+			ADDR_OUT_set_dir(PORT_DIR_IN);
+		}
+		else if (command == INTERSENSOR_SYNC_ENABLE)
+		{
+			intersensor_sync = true;
+
+			/* Disables crosstalk reduction */
+			crosstalk_enabled = false;
+
+			/* Set to continuous if not master, if not and if master it's whatever the mode is
+			   This is since the master can be in single or continuous mode and it triggers
+			   the other devices whenever it fires off a new read */
+			if (!is_master) {
+				current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
+				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			}
+
+		}
+		else if (command == INTERSENSOR_SYNC_DISABLE)
+		{
+			intersensor_sync = false;
 		}
         else if (command == VL53L1X_SHUTDOWN)
         {
@@ -813,16 +863,19 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
         else if (command == INTERSENSOR_CROSSTALK_REDUCTION_ENABLE)
         {
             crosstalk_enabled = true;
-            //Set to single ranging mode
 
-            setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
+			/* Disable intersensor sync */
+			intersensor_sync = false;
+
+            if (!is_master) {
+	            current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
+	            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+            }
         }
 
         else if (command == INTERSENSOR_CROSSTALK_REDUCTION_DISABLE)
         {
             crosstalk_enabled = false;
-
-            if (current_ranging_mode == SET_CONTINUOUS_RANGING_MODE) setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
         }
 
 		else if (command == ENABLE_CROSSTALK_COMPENSATION)
@@ -843,7 +896,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 		{
 		    calibrating = true;
 
-			//Set to single ranging mode (stop measurement)
+			/* Set to single ranging mode (stop measurement) */
 			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
 
 		    if(calibrateSPAD(pDevice, &status, &calibration_data) == 0) //returns 0 if success
@@ -854,7 +907,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			else
 				flash_led(500,4,0); //error
 
-			//Reset back to original ranging mode
+			/* Reset back to original ranging mode */
 			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 			calibrating = false;
         }
@@ -877,23 +930,39 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
         else if (command == SET_CONTINUOUS_RANGING_MODE)
         {
-            current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
+			/* Disables intersensor sync/crosstalk */
+			intersensor_sync = false;
+			crosstalk_enabled = false;
 
-            if (crosstalk_enabled != 1) { 
-				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
-			}
+			current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
 
         }
 
         else if (command == SET_SINGLE_RANGING_MODE)
         {
+		    /* Disables intersensor sync/crosstalk */
+		    intersensor_sync = false;
+			crosstalk_enabled = false;
+
             current_ranging_mode = SET_SINGLE_RANGING_MODE;
             setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
         }
 
         else if (command == PERFORM_SINGLE_RANGE) {
 			if (current_ranging_mode == SET_SINGLE_RANGING_MODE) 
+			{
 				startSingleRangingMeasurement(pDevice, &status);
+
+				if (intersensor_sync && is_master)
+				{
+					/* Create trigger after measurement finished.
+						For sync, we assume a new measurement is already underway */
+					/* Note that for this to happen, we are in "crosstalk"
+						(single) ranging mode */
+					ADDR_OUT_set_level(false);
+				}       
+			} 
 		}
     }
 
@@ -1287,12 +1356,19 @@ ISR (PCINT1_vect)
 }
 #endif
 
-/* Crosstalk interrupt fired */
+/* Crosstalk/sync interrupt fired */
 ISR (PCINT0_vect)
 {
+
+	/* Pass on pulse straight away to next in chain */
+	if (intersensor_sync)
+	{
+		ADDR_OUT_set_level(ADDR_IN_get_level());
+	}
+
 	if(ADDR_IN_get_level() == 0)
 	{
-		crosstalk_interrupt_fired = true;
+		crosstalk_sync_interrupt_fired = true;
 	}
 }
 
