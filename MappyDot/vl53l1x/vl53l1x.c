@@ -30,6 +30,10 @@
 
 void startContinuous(VL53L1_Dev_t * device, VL53L1_Error * status, uint32_t period_ms);
 
+/* For setting full ROI */
+VL53L1_UserRoi_t fullROI;
+
+
 /**
  * \brief Initialise Ranging
  * 
@@ -57,6 +61,12 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 	#endif
 	
     //*status = VL53L1_platform_init(device, device->i2c_slave_address);
+
+	/* Init full ROI values */
+	fullROI.TopLeftX = 0;
+	fullROI.TopLeftY = 15;
+	fullROI.BotRightX = 15;
+	fullROI.BotRightY = 0;
 
 	*status = VL53L1_CommsInitialise(device);
 
@@ -99,19 +109,18 @@ bool init_ranging(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t ranging_
 
 	}
 
-	
+	if (*status == VL53L1_ERROR_NONE )
+	{
+		setRangingMeasurementMode(device,status,measurement_mode,measurement_budget, ROI);
+	}
 
+	setRangingMode(device, status, ranging_mode);
+
+	/* setRegionOfInterest must be set after setRangingMode since it's reset in VL53L1_preset_mode_standard_ranging */
 	if( *status == VL53L1_ERROR_NONE )
 	{
  		setRegionOfInterest(device,status,ROI);
 	}
-
-	if (*status == VL53L1_ERROR_NONE )
-	{
-		setRangingMeasurementMode(device,status,measurement_mode,measurement_budget);
-	}
-
-	setRangingMode(device, status, ranging_mode, measurement_mode, measurement_budget);
 
     if( *status == VL53L1_ERROR_NONE )
     {
@@ -140,12 +149,8 @@ void setRegionOfInterest(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_Us
 	/* Set a default if failed */
 	if (*status !=  VL53L1_ERROR_NONE )
 	{
-		ROI->TopLeftX = 0;
-		ROI->TopLeftY = 15;
-		ROI->BotRightX = 15;
-		ROI->BotRightY = 0;
 
-		*status = VL53L1_SetUserROI(device,ROI);
+		*status = VL53L1_SetUserROI(device,&fullROI);
 	}
 
 	/* Get "set" User ROI */
@@ -193,7 +198,7 @@ void setCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t enabled)
  * 
  * \return void
  */
-void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single_mode, uint8_t measurement_mode, uint16_t measurement_budget)
+void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single_mode)
 {
     stopContinuous(device, status);
     if (!single_mode)
@@ -250,13 +255,19 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
  * 
  * \return uint16_t
  */
- uint16_t setRangingMeasurementMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t measurement_mode, uint16_t measurement_budget)
+ uint16_t setRangingMeasurementMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t measurement_mode, uint16_t measurement_budget, VL53L1_UserRoi_t * ROI)
 {
 	if (measurement_mode == MED_RANGE) measurement_mode = VL53L1_DISTANCEMODE_MEDIUM;
 	else if (measurement_mode == LONG_RANGE) measurement_mode = VL53L1_DISTANCEMODE_LONG;
 	else measurement_mode = VL53L1_DISTANCEMODE_SHORT;
 
 	*status = VL53L1_SetPresetMode(device, VL53L1_PRESETMODE_LITE_RANGING, measurement_mode, measurement_budget, measurement_budget);
+
+	/* setRegionOfInterest must be set after setRangingMode since it's reset in VL53L1_preset_mode_standard_ranging */
+	if( *status == VL53L1_ERROR_NONE )
+	{
+		setRegionOfInterest(device,status,ROI);
+	}
 
 	return 0;
 }
@@ -273,6 +284,8 @@ void setLimitChecks(VL53L1_Dev_t * device, VL53L1_Error * status, uint16_t signa
  */
 uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration)
 {
+    setRangingMeasurementMode(device, status, MED_RANGE, 50, &fullROI);
+
     if (VL53L1_PerformRefSpadManagement(device) != VL53L1_ERROR_NONE) return 1;
 
 	VL53L1_GetCalibrationData(device, calibration);
@@ -293,6 +306,9 @@ uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_Calib
  */
 uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration, uint16_t calibration_distance_mm)
 {
+
+	setRangingMeasurementMode(device, status, MED_RANGE, 50, &fullROI);
+
     VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK); //Needs to be set, otherwise it returns range result 6
 
     if (VL53L1_PerformOffsetSimpleCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) return 1;
@@ -315,6 +331,9 @@ uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL
  */
 uint8_t calibrateCrosstalk(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration, uint16_t calibration_distance_mm)
 {
+
+    setRangingMeasurementMode(device, status, MED_RANGE, 50, &fullROI);
+
     VL53L1DevDataSet(device, LLData.measurement_mode, VL53L1_DEVICEMEASUREMENTMODE_BACKTOBACK);
 
 	if (VL53L1_PerformSingleTargetXTalkCalibration(device, calibration_distance_mm) != VL53L1_ERROR_NONE) return 1;

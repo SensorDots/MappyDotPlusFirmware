@@ -39,8 +39,8 @@ VL53L1_Error startSingleRangingMeasurement(VL53L1_Dev_t * device, VL53L1_Error *
 uint16_t resetVL53L1Interrupt(VL53L1_Dev_t * device, VL53L1_Error * status);
 uint16_t readRange(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_RangingMeasurementData_t *RangingMeasurementData );
 void stopContinuous(VL53L1_Dev_t * device, VL53L1_Error * status);
-uint16_t setRangingMeasurementMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t measurement_mode, uint16_t measurement_budget);
-void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single_mode, uint8_t measurement_mode, uint16_t measurement_budget);
+uint16_t setRangingMeasurementMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t measurement_mode, uint16_t measurement_budget, VL53L1_UserRoi_t * ROI);
+void setRangingMode(VL53L1_Dev_t * device, VL53L1_Error * status, uint8_t single_mode);
 
 uint8_t calibrateSPAD(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration);
 uint8_t calibrateDistanceOffset(VL53L1_Dev_t * device, VL53L1_Error * status, VL53L1_CalibrationData_t * calibration, uint16_t calibration_distance_mm);

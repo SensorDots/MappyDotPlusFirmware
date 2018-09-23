@@ -525,7 +525,7 @@ int main(void)
 				   on startup, the interrupts don't fire after first few tries due to VL53L1_RANGESTATUS_RANGE_VALID_NO_WRAP_CHECK_FAIL */
 				if (run_until_settle == 0)
 				{
-					setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+					setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 					run_until_settle--;
 				}
 				else if (run_until_settle > 0)
@@ -790,7 +790,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			   the other devices whenever it fires off a new read */
 			if (!is_master) {
 				current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
-				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+				setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 			}
 
 		}
@@ -869,7 +869,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
             if (!is_master) {
 	            current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
-	            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+	            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
             }
         }
 
@@ -882,14 +882,14 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 		{
 		    stopContinuous(pDevice, &status);
 			setCrosstalk(pDevice, &status, 1);
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 		}
 
 		else if (command == DISABLE_CROSSTALK_COMPENSATION)
 		{
 		    stopContinuous(pDevice, &status);
 			setCrosstalk(pDevice, &status, 0);
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 		}
 
         else if (command == CALIBRATE_SPAD) 
@@ -897,7 +897,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 		    calibrating = true;
 
 			/* Set to single ranging mode (stop measurement) */
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
 
 		    if(calibrateSPAD(pDevice, &status, &calibration_data) == 0) //returns 0 if success
 			{
@@ -908,7 +908,9 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 				flash_led(500,4,0); //error
 
 			/* Reset back to original ranging mode */
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget, &ROI);
+
 			calibrating = false;
         }
 
@@ -935,7 +937,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			crosstalk_enabled = false;
 
 			current_ranging_mode = SET_CONTINUOUS_RANGING_MODE;
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 
         }
 
@@ -946,7 +948,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			crosstalk_enabled = false;
 
             current_ranging_mode = SET_SINGLE_RANGING_MODE;
-            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+            setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
         }
 
         else if (command == PERFORM_SINGLE_RANGE) {
@@ -956,10 +958,7 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 
 				if (intersensor_sync && is_master)
 				{
-					/* Create trigger after measurement finished.
-						For sync, we assume a new measurement is already underway */
-					/* Note that for this to happen, we are in "crosstalk"
-						(single) ranging mode */
+					/* Create trigger sync */
 					ADDR_OUT_set_level(false);
 				}       
 			} 
@@ -1044,10 +1043,10 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 		    stopContinuous(pDevice,&status);
 
 			//Change to selected measurement mode
-            setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget);
+            setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget, &ROI);
 
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 
 			//reset_vl53l0x_ranging();
 
@@ -1066,13 +1065,14 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			else if (measurement_budget > 1000) measurement_budget = 1000;
 			//TODO consolidate this reset into one function
 			stopContinuous(pDevice,&status);
-			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget);
+			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget, &ROI);
+
 			#ifndef DEV_DISABLE
 			/* Initialise Filter */
 			bwlpf_init(&low_pass_filter_state,1000/measurement_budget,FILTER_FREQUENCY);
 			#endif
 			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
 		}
 
 		else if (command == SIGNAL_LIMIT_CHECK_VALUE) {
@@ -1088,8 +1088,8 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			PCICR &= ~(1 << PCIE1);    // unset PCIE1 to enable PCMSK1 scan
 			PCMSK1 &= ~(1 << PCINT11);  // unset PCINT11 to trigger an interrupt on state change
 
-			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
+			/* Set to single ranging mode (stop measurement) */
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
 
 			if (calibrateDistanceOffset(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
 			{
@@ -1104,8 +1104,9 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			PCICR |= (1 << PCIE1);    // set PCIE1 to enable PCMSK1 scan
 			PCMSK1 |= (1 << PCINT11);  // set PCINT11 to trigger an interrupt on state change
 
-			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			/* Reset back to original ranging mode */
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget, &ROI);
 
 			calibrating = false;
 		}	    
@@ -1120,8 +1121,8 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			PCICR &= ~(1 << PCIE1);    // unset PCIE1 to enable PCMSK1 scan
 			PCMSK1 &= ~(1 << PCINT11);  // unset PCINT11 to trigger an interrupt on state change
 
-			//Set to single ranging mode (stop measurement)
-			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE), current_measurement_mode, measurement_budget);
+			/* Set to single ranging mode (stop measurement) */
+			setRangingMode(pDevice, &status, translate_ranging_mode(SET_SINGLE_RANGING_MODE));
 
 		    if (calibrateCrosstalk(pDevice, &status, &calibration_data, bytes_to_mm(arg[0],arg[1])) == 0)  //returns 0 if success
 			{	
@@ -1138,8 +1139,10 @@ void handle_rx_command(uint8_t command, uint8_t * arg, uint8_t arg_length)
 			PCICR |= (1 << PCIE1);    // set PCIE1 to enable PCMSK1 scan
 			PCMSK1 |= (1 << PCINT11);  // set PCINT11 to trigger an interrupt on state change
 
-			//Reset back to original ranging mode
-			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode), current_measurement_mode, measurement_budget);
+			/* Reset back to original ranging mode */
+			setRangingMode(pDevice, &status, translate_ranging_mode(current_ranging_mode));
+			setRangingMeasurementMode(pDevice, &status, current_measurement_mode, measurement_budget, &ROI);
+
 			calibrating = false;
 		        
 		}
