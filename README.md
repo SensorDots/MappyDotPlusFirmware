@@ -17,3 +17,5 @@ MappyDots can be queried for their firmware version with the I2C command N (0x4E
 ## Features Under Development
    - Inter-device crosstalk grouping. Will allow you to assign groups to devices to prevent crosstalk.
    - Assign new start address to master and assign master in firmware.
+   - Access internal VL53L1x register table (read only)
+   .
