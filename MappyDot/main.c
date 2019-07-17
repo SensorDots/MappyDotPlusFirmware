@@ -220,11 +220,11 @@ int main(void)
 
     else if (slave_address >= START_ADDRESS && slave_address <= END_ADDRESS)
     {
-        /* I2C Slave Init */
-        i2c_slave_init(slave_address);
-
 		/* Write address to EEPROM for recovery of address on fail */
 		store_current_address_eeprom(EEPROM_ADDRESS_BYTE, slave_address);
+
+        /* I2C Slave Init */
+        i2c_slave_init(slave_address);
     }
     else
     {

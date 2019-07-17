@@ -40,7 +40,7 @@
  */
 void addr_master_init(void)
 {
-    /* Set pin direction to output */
+    /* Set pin direction to input */
     ADDR_OUT_set_dir(PORT_DIR_IN);
     /* Master has no pull up on init*/
     ADDR_OUT_set_pull_mode(
